@@ -1,0 +1,73 @@
+'use client';
+
+import React, { forwardRef } from 'react';
+import { cn } from '@/lib/utils';
+import { ChevronDown } from 'lucide-react';
+
+interface SelectOption {
+    value: string;
+    label: string;
+    disabled?: boolean;
+}
+
+interface SelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
+    label?: string;
+    error?: string;
+    hint?: string;
+    options: SelectOption[];
+    placeholder?: string;
+    containerClassName?: string;
+}
+
+export const Select = forwardRef<HTMLSelectElement, SelectProps>(
+    (
+        { label, error, hint, options, placeholder, containerClassName, className, id, ...props },
+        ref
+    ) => {
+        const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
+
+        return (
+            <div className={cn('flex flex-col gap-1', containerClassName)}>
+                {label && (
+                    <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+                        {label}
+                        {props.required && <span className="text-red-500 ml-1">*</span>}
+                    </label>
+                )}
+                <div className="relative">
+                    <select
+                        ref={ref}
+                        id={inputId}
+                        aria-invalid={!!error}
+                        className={cn(
+                            'w-full appearance-none rounded-lg border bg-white px-3 py-2 pr-10 text-sm text-gray-900 transition-colors',
+                            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
+                            'disabled:bg-gray-50 disabled:cursor-not-allowed',
+                            error
+                                ? 'border-red-400'
+                                : 'border-gray-300 hover:border-gray-400',
+                            className
+                        )}
+                        {...props}
+                    >
+                        {placeholder && (
+                            <option value="" disabled>
+                                {placeholder}
+                            </option>
+                        )}
+                        {options.map((opt) => (
+                            <option key={opt.value} value={opt.value} disabled={opt.disabled}>
+                                {opt.label}
+                            </option>
+                        ))}
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                </div>
+                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+                {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
+            </div>
+        );
+    }
+);
+
+Select.displayName = 'Select';
