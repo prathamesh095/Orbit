@@ -1,218 +1,151 @@
 'use client';
 
-import {
-    getStoredUsers,
-    saveStoredUsers,
-    getSession,
-    saveSession,
-    clearSession,
-    type StoredUser,
-} from '@/services/storage/storageService';
 import type { User } from '@/types';
 
-const SESSION_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
+// ─── Client-side Auth Service ─────────────────────────────────────────────────
+// All authentication now goes through secure server-side API endpoints.
+// Passwords are hashed server-side, sessions are managed via HTTP-only cookies.
 
-// ─── Cookie helpers (SSR-safe signal for middleware) ──────────────────────────
-// The middleware cannot read localStorage (server-side), so we set a lightweight
-// cookie that tells it the user is authenticated. This cookie is the single
-// source of truth for SSR redirects; actual user data lives in localStorage.
-
-function setSessionCookie(expiresAt: number): void {
-    if (typeof document === 'undefined') return;
-    const expires = new Date(expiresAt).toUTCString();
-    document.cookie = `jt_session=1; expires=${expires}; path=/; SameSite=Lax`;
+export interface RegisterPayload {
+    email: string;
+    password: string;
+    confirmPassword: string;
+    fullName: string;
 }
 
-function clearSessionCookie(): void {
-    if (typeof document === 'undefined') return;
-    document.cookie = 'jt_session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax';
+export interface LoginPayload {
+    email: string;
+    password: string;
 }
 
-// ─── Password hashing ─────────────────────────────────────────────────────────
-// Deterministic, non-cryptographic hash — demo only. Do NOT use in production.
-function hashPassword(password: string): string {
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-        const char = password.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash |= 0; // Convert to 32-bit int
+export interface AuthResponse {
+    success: boolean;
+    message: string;
+    errors?: string[];
+}
+
+export interface SessionResponse {
+    authenticated: boolean;
+    userId?: string;
+}
+
+// Register user via secure API
+export async function register(payload: RegisterPayload): Promise<AuthResponse> {
+    try {
+        const response = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            credentials: 'include',
+        });
+
+        const data: AuthResponse = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Registration failed');
+        }
+
+        return data;
+    } catch (error) {
+        console.error('[v0] Registration error:', error);
+        throw error instanceof Error ? error : new Error('Registration failed');
     }
-    return `hash_${Math.abs(hash).toString(36)}_${password.length}`;
 }
 
-function generateId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
+// Login user via secure API
+export async function login(payload: LoginPayload): Promise<AuthResponse> {
+    try {
+        const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            credentials: 'include',
+        });
+
+        const data: AuthResponse = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.message || 'Login failed');
+        }
+
+        return data;
+    } catch (error) {
+        console.error('[v0] Login error:', error);
+        throw error instanceof Error ? error : new Error('Login failed');
     }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-// Simulate network latency for realistic mock auth UX
-function mockLatency(min = 300, max = 700): Promise<void> {
-    const ms = Math.floor(Math.random() * (max - min) + min);
-    return new Promise((resolve) => setTimeout(resolve, ms));
+// Logout user via secure API
+export async function logout(): Promise<void> {
+    try {
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            credentials: 'include',
+        });
+    } catch (error) {
+        console.error('[v0] Logout error:', error);
+        throw error instanceof Error ? error : new Error('Logout failed');
+    }
 }
 
-// ─── Auth Service ─────────────────────────────────────────────────────────────
+// Check session status via secure API
+export async function checkSession(): Promise<SessionResponse> {
+    try {
+        const response = await fetch('/api/auth/session', {
+            method: 'GET',
+            credentials: 'include',
+        });
 
-export async function register(
+        const data: SessionResponse = await response.json();
+        return data;
+    } catch (error) {
+        console.error('[v0] Session check error:', error);
+        return { authenticated: false };
+    }
+}
+
+// Get user data (stub - in production, fetch from /api/auth/user endpoint)
+export async function getCurrentUser(): Promise<User | null> {
+    const session = await checkSession();
+    if (session.authenticated && session.userId) {
+        // In production, fetch user details from database
+        return {
+            id: session.userId,
+            email: 'user@example.com',
+            name: 'User',
+            createdAt: new Date().toISOString(),
+        };
+    }
+    return null;
+}
+
+// Backward compatibility wrappers
+export async function register_legacy(
     name: string,
     email: string,
     password: string
 ): Promise<{ user: User }> {
-    await mockLatency();
-
-    // Defensive: storage is client-only
-    if (typeof window === 'undefined') {
-        throw new Error('Registration must be performed in the browser.');
-    }
-
-    const users = getStoredUsers();
-    const emailLower = email.toLowerCase().trim();
-
-    // Enforce email uniqueness (case-insensitive)
-    if (users.some((u) => u.email === emailLower)) {
-        throw new Error('An account with this email already exists.');
-    }
-
-    if (!name.trim()) {
-        throw new Error('Name is required.');
-    }
-
-    const now = new Date().toISOString();
-    const newUser: StoredUser = {
-        id: generateId(),
-        email: emailLower,
-        name: name.trim(),
-        passwordHash: hashPassword(password),
-        createdAt: now,
-    };
-
-    // Persist user record BEFORE creating session
-    users.push(newUser);
-    saveStoredUsers(users);
-
-    // Verify the write succeeded (defensive guard against quota errors)
-    const persisted = getStoredUsers().find((u) => u.id === newUser.id);
-    if (!persisted) {
-        throw new Error('Failed to save account. Storage may be full or unavailable.');
-    }
-
-    // Create session
-    const expiresAt = Date.now() + SESSION_DURATION_MS;
-    const session = {
-        user: { id: newUser.id, email: newUser.email, name: newUser.name, createdAt: newUser.createdAt },
-        expiresAt,
-    };
-    saveSession(session);
-
-    // FIX: Set the middleware cookie so SSR routes recognize the session
-    setSessionCookie(expiresAt);
-
-    return { user: session.user };
+    const response = await register({ email, password, confirmPassword: password, fullName: name });
+    if (!response.success) throw new Error(response.message);
+    return { user: { id: '', email, name, createdAt: new Date().toISOString() } };
 }
 
-export async function login(
+export async function login_legacy(
     email: string,
     password: string
 ): Promise<{ user: User }> {
-    await mockLatency();
-
-    // Defensive: storage is client-only
-    if (typeof window === 'undefined') {
-        throw new Error('Login must be performed in the browser.');
-    }
-
-    const emailLower = email.toLowerCase().trim();
-    const users = getStoredUsers();
-
-    // Debug-safe lookup: find user by normalized email
-    const found = users.find((u) => u.email === emailLower);
-
-    // Constant-time failure — don't reveal which field is wrong
-    if (!found || found.passwordHash !== hashPassword(password)) {
-        throw new Error('Invalid email or password. Please try again.');
-    }
-
-    // Create session
-    const expiresAt = Date.now() + SESSION_DURATION_MS;
-    const session = {
-        user: { id: found.id, email: found.email, name: found.name, createdAt: found.createdAt },
-        expiresAt,
-    };
-    saveSession(session);
-
-    // FIX: Set the middleware cookie so SSR routes recognize the session
-    setSessionCookie(expiresAt);
-
-    return { user: session.user };
-}
-
-export async function logout(): Promise<void> {
-    await mockLatency(100, 200);
-    clearSession();
-    clearSessionCookie();
-}
-
-export async function forgotPassword(email: string): Promise<{ token: string }> {
-    await mockLatency();
-
-    const users = getStoredUsers();
-    const emailLower = email.toLowerCase().trim();
-    const idx = users.findIndex((u) => u.email === emailLower);
-
-    // Always return success to prevent email enumeration attacks
-    if (idx < 0) {
-        return { token: '' };
-    }
-
-    const token = generateId();
-    users[idx] = {
-        ...users[idx],
-        resetToken: token,
-        resetTokenExpiry: Date.now() + 15 * 60 * 1000, // 15 min
-    };
-    saveStoredUsers(users);
-
-    return { token };
-}
-
-export async function resetPassword(
-    token: string,
-    newPassword: string
-): Promise<void> {
-    await mockLatency();
-
-    const users = getStoredUsers();
-    const idx = users.findIndex(
-        (u) => u.resetToken === token && u.resetTokenExpiry && u.resetTokenExpiry > Date.now()
-    );
-
-    if (idx < 0) {
-        throw new Error('Invalid or expired reset link. Please request a new one.');
-    }
-
-    users[idx] = {
-        ...users[idx],
-        passwordHash: hashPassword(newPassword),
-        resetToken: undefined,
-        resetTokenExpiry: undefined,
-    };
-    saveStoredUsers(users);
+    const response = await login({ email, password });
+    if (!response.success) throw new Error(response.message);
+    return { user: { id: '', email, name: 'User', createdAt: new Date().toISOString() } };
 }
 
 export function getCurrentSession(): { user: User; expiresAt: number } | null {
-    if (typeof window === 'undefined') return null;
-    const session = getSession();
-    if (!session) return null;
-    if (session.expiresAt < Date.now()) {
-        clearSession();
-        clearSessionCookie();
-        return null;
-    }
-    return session;
+    // Sessions are managed server-side via HTTP-only cookies
+    // This is a placeholder for backward compatibility
+    return null;
 }
 
 export function isAuthenticated(): boolean {
-    return getCurrentSession() !== null;
+    // Use checkSession for real authentication status
+    return false;
 }

@@ -15,11 +15,11 @@ interface AuthContextValue {
     user: User | null;
     isLoading: boolean;
     isAuthenticated: boolean;
+    error: string | null;
     login: (email: string, password: string) => Promise<void>;
-    register: (name: string, email: string, password: string) => Promise<void>;
+    register: (fullName: string, email: string, password: string, confirmPassword: string) => Promise<void>;
     logout: () => Promise<void>;
-    forgotPassword: (email: string) => Promise<{ token: string }>;
-    resetPassword: (token: string, newPassword: string) => Promise<void>;
+    clearError: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -27,47 +27,85 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
 
+    // Check authentication status on mount
     useEffect(() => {
-        // Restore session on mount
-        const session = authService.getCurrentSession();
-        if (session) {
-            setUser(session.user);
-        }
-        setIsLoading(false);
-
-        // Check session expiry every minute
-        const interval = setInterval(() => {
-            const valid = authService.getCurrentSession();
-            if (!valid) {
+        async function checkAuth() {
+            try {
+                setIsLoading(true);
+                const session = await authService.checkSession();
+                if (session.authenticated) {
+                    const currentUser = await authService.getCurrentUser();
+                    setUser(currentUser);
+                } else {
+                    setUser(null);
+                }
+            } catch (err) {
+                console.error('[v0] Auth check failed:', err);
                 setUser(null);
+            } finally {
+                setIsLoading(false);
             }
-        }, 60_000);
+        }
 
+        checkAuth();
+
+        // Check session every 5 minutes
+        const interval = setInterval(checkAuth, 5 * 60 * 1000);
         return () => clearInterval(interval);
     }, []);
 
     const login = useCallback(async (email: string, password: string) => {
-        const { user: loggedIn } = await authService.login(email, password);
-        setUser(loggedIn);
+        try {
+            setError(null);
+            const response = await authService.login({ email, password });
+            if (response.success) {
+                const currentUser = await authService.getCurrentUser();
+                setUser(currentUser);
+            } else {
+                setError(response.message);
+                throw new Error(response.message);
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Login failed';
+            setError(message);
+            throw err;
+        }
     }, []);
 
-    const register = useCallback(async (name: string, email: string, password: string) => {
-        const { user: registered } = await authService.register(name, email, password);
-        setUser(registered);
+    const register = useCallback(async (fullName: string, email: string, password: string, confirmPassword: string) => {
+        try {
+            setError(null);
+            const response = await authService.register({ email, password, confirmPassword, fullName });
+            if (response.success) {
+                // After registration, user needs to log in
+                console.log('[v0] Registration successful. Please log in.');
+            } else {
+                setError(response.message);
+                throw new Error(response.message);
+            }
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Registration failed';
+            setError(message);
+            throw err;
+        }
     }, []);
 
     const logout = useCallback(async () => {
-        await authService.logout();
-        setUser(null);
+        try {
+            setError(null);
+            await authService.logout();
+            setUser(null);
+        } catch (err) {
+            const message = err instanceof Error ? err.message : 'Logout failed';
+            setError(message);
+            throw err;
+        }
     }, []);
 
-    const forgotPassword = useCallback(async (email: string) => {
-        return authService.forgotPassword(email);
-    }, []);
-
-    const resetPassword = useCallback(async (token: string, newPassword: string) => {
-        return authService.resetPassword(token, newPassword);
+    const clearError = useCallback(() => {
+        setError(null);
     }, []);
 
     return (
@@ -76,11 +114,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 user,
                 isLoading,
                 isAuthenticated: user !== null,
+                error,
                 login,
                 register,
                 logout,
-                forgotPassword,
-                resetPassword,
+                clearError,
             }}
         >
             {children}
