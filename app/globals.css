@@ -335,14 +335,10 @@
     @apply flex items-center justify-center;
   }
 
-  /* Disable text selection */
-  .select-none {
-    @apply user-select-none;
-  }
-
   /* Force GPU acceleration */
   .gpu-accelerated {
-    @apply will-change-transform transform-gpu;
+    @apply will-change-transform;
+    transform: translateZ(0);
   }
 }
 
