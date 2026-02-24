@@ -29,37 +29,115 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        // Restore session on mount
-        const session = authService.getCurrentSession();
-        if (session) {
-            setUser(session.user);
-        }
-        setIsLoading(false);
+        // Restore session from server on mount
+        const restoreSession = async () => {
+            try {
+                const session = authService.getCurrentSession();
+                if (session) {
+                    setUser(session.user);
+                }
+            } catch (error) {
+                console.error('[AUTH] Failed to restore session:', error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
 
-        // Check session expiry every minute
+        restoreSession();
+
+        // Check session validity periodically
         const interval = setInterval(() => {
-            const valid = authService.getCurrentSession();
-            if (!valid) {
+            const session = authService.getCurrentSession();
+            if (!session) {
                 setUser(null);
             }
-        }, 60_000);
+        }, 60_000); // Check every minute
 
         return () => clearInterval(interval);
     }, []);
 
     const login = useCallback(async (email: string, password: string) => {
-        const { user: loggedIn } = await authService.login(email, password);
-        setUser(loggedIn);
+        try {
+            // Call server-side API route
+            const response = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include', // Include cookies
+                body: JSON.stringify({ email, password }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Login failed');
+            }
+
+            const data = await response.json();
+            if (data.success && data.user) {
+                // Server set HTTP-only cookie, update state
+                setUser(data.user);
+                // Also update localStorage session for hydration
+                authService.saveSession({
+                    user: data.user,
+                    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+                });
+            } else {
+                throw new Error(data.error || 'Login failed');
+            }
+        } catch (error) {
+            console.error('[AUTH] Login error:', error);
+            throw error;
+        }
     }, []);
 
     const register = useCallback(async (name: string, email: string, password: string) => {
-        const { user: registered } = await authService.register(name, email, password);
-        setUser(registered);
+        try {
+            // Call server-side API route
+            const response = await fetch('/api/auth/register', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ name, email, password }),
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || 'Registration failed');
+            }
+
+            const data = await response.json();
+            if (data.success && data.user) {
+                setUser(data.user);
+                // Also update localStorage session for hydration
+                authService.saveSession({
+                    user: data.user,
+                    expiresAt: Date.now() + 24 * 60 * 60 * 1000,
+                });
+            } else {
+                throw new Error(data.error || 'Registration failed');
+            }
+        } catch (error) {
+            console.error('[AUTH] Register error:', error);
+            throw error;
+        }
     }, []);
 
     const logout = useCallback(async () => {
-        await authService.logout();
-        setUser(null);
+        try {
+            // Call server-side logout API
+            await fetch('/api/auth/logout', {
+                method: 'POST',
+                credentials: 'include',
+            });
+
+            // Clear client state
+            authService.logout();
+            setUser(null);
+        } catch (error) {
+            console.error('[AUTH] Logout error:', error);
+            // Clear state anyway
+            authService.logout();
+            setUser(null);
+        }
     }, []);
 
     const forgotPassword = useCallback(async (email: string) => {
