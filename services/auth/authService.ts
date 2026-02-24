@@ -52,23 +52,14 @@ function clearSessionCookie(): void {
 // For now, we provide a migration path with placeholder that must be implemented
 // on the backend API endpoints
 
-async function hashPassword(password: string): Promise<string> {
-    // SECURITY NOTE: This function signature has been updated to async
-    // The implementation MUST use bcryptjs on the server side:
-    // 
-    // import bcrypt from 'bcryptjs';
-    // const salt = await bcrypt.genSalt(13);
-    // return await bcrypt.hash(password, salt);
-    //
-    // ⚠️ Client-side hashing is NOT secure - passwords must be hashed on the server
-    // This is a placeholder for the migration to server-side authentication
+// ⚠️ SECURITY WARNING: This uses a non-cryptographic hash for DEMO ONLY
+// In production, password hashing MUST occur server-side using bcryptjs (13 rounds)
+// See SECURITY_IMPLEMENTATION_ROADMAP.md Phase 1 for migration plan
+function hashPassword(password: string): string {
+    // TEMPORARY: Demo-only implementation
+    // This is vulnerable and must be replaced with server-side bcrypt
     
-    if (typeof window !== 'undefined') {
-        throw new Error('Password hashing must be performed server-side, not in browser');
-    }
-    
-    // Temporary fallback for demo purposes - MUST BE REPLACED with bcrypt
-    // This ensures existing demo data continues to work during transition
+    // Use simple deterministic hash for demo compatibility
     let hash = 0;
     for (let i = 0; i < password.length; i++) {
         const char = password.charCodeAt(i);
@@ -77,10 +68,16 @@ async function hashPassword(password: string): Promise<string> {
     }
     const hashedValue = `hash_${Math.abs(hash).toString(36)}_${password.length}`;
     
-    console.warn(
-        '[SECURITY] ⚠️ Using demo hash function. This MUST be replaced with bcryptjs on server-side API routes.\n' +
-        'See SECURITY_IMPLEMENTATION_ROADMAP.md for migration instructions.'
-    );
+    // Log security warning once per session
+    if (typeof window !== 'undefined' && !window.__securityWarningLogged) {
+        console.warn(
+            '[SECURITY] ⚠️ WARNING: Using demo password hash function.\n' +
+            'This is NOT suitable for production. Passwords are being hashed client-side using a non-cryptographic function.\n' +
+            'REQUIRED ACTION: Migrate to bcryptjs on server-side API routes.\n' +
+            'See SECURITY_IMPLEMENTATION_ROADMAP.md Phase 1 for step-by-step migration guide.'
+        );
+        window.__securityWarningLogged = true;
+    }
     
     return hashedValue;
 }
