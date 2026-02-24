@@ -17,6 +17,8 @@ export interface PipelineColumnProps {
     bgClass: string;
     applications: Application[];
     totalApplications: number;
+    selectedIds: Set<string>;
+    toggleSelection: (id: string) => void;
     onDeleteCard?: (id: string) => void;
     onView?: (id: string) => void;
     onEdit?: (id: string) => void;
@@ -66,6 +68,7 @@ function ColumnProgress({ count, total, fillClass }: { count: number; total: num
 function PipelineColumnInner({
     id, title, accentClass, dotClass, bgClass,
     applications, totalApplications,
+    selectedIds, toggleSelection,
     onDeleteCard, onView, onEdit,
 }: PipelineColumnProps) {
     return (
@@ -121,6 +124,8 @@ function PipelineColumnInner({
                                     key={app.id}
                                     application={app}
                                     index={index}
+                                    isSelected={selectedIds.has(app.id)}
+                                    onToggleSelection={toggleSelection}
                                     onDelete={onDeleteCard}
                                     onView={onView}
                                     onEdit={onEdit}
@@ -140,6 +145,8 @@ function PipelineColumnInner({
 export const PipelineColumn = memo(PipelineColumnInner, (prev, next) => {
     if (prev.applications.length !== next.applications.length) return false;
     if (prev.id !== next.id || prev.totalApplications !== next.totalApplications) return false;
+    if (prev.selectedIds.size !== next.selectedIds.size) return false;
+
     for (let i = 0; i < prev.applications.length; i++) {
         const p = prev.applications[i];
         const n = next.applications[i];
@@ -148,7 +155,8 @@ export const PipelineColumn = memo(PipelineColumnInner, (prev, next) => {
             p.status !== n.status ||
             p.nextFollowUp !== n.nextFollowUp ||
             p.updatedAt !== n.updatedAt ||
-            (p.attachments?.length ?? 0) !== (n.attachments?.length ?? 0)
+            (p.attachments?.length ?? 0) !== (n.attachments?.length ?? 0) ||
+            prev.selectedIds.has(p.id) !== next.selectedIds.has(n.id)
         ) return false;
     }
     return true;

@@ -4,6 +4,7 @@ import type {
     Notification,
     Reminder,
     UserSettings,
+    AppSettings,
     ExecutionLog,
     ApplicationDraft,
     ContactDraft,
@@ -80,16 +81,20 @@ export function deleteApplication(userId: string, id: string): void {
 
 // ─── Application Drafts ───────────────────────────────────────────────────────
 
+function makeDraftKey(userId: string, draftId: string): string {
+    return `draft:${userId}:${draftId}:v1`;
+}
+
 export function getApplicationDraft(userId: string, draftId: string): ApplicationDraft | null {
-    return safeGet<ApplicationDraft | null>(makeKey(userId, `draft:app:${draftId}`), null);
+    return safeGet<ApplicationDraft | null>(makeDraftKey(userId, draftId), null);
 }
 
 export function saveApplicationDraft(userId: string, draftId: string, draft: ApplicationDraft): void {
-    safeSet(makeKey(userId, `draft:app:${draftId}`), draft);
+    safeSet(makeDraftKey(userId, draftId), draft);
 }
 
 export function clearApplicationDraft(userId: string, draftId: string): void {
-    safeRemove(makeKey(userId, `draft:app:${draftId}`));
+    safeRemove(makeDraftKey(userId, draftId));
 }
 
 // ─── Contacts ─────────────────────────────────────────────────────────────────
@@ -165,18 +170,37 @@ export function appendExecutionLog(userId: string, log: ExecutionLog): void {
 
 // ─── User Settings ────────────────────────────────────────────────────────────
 
-export function getUserSettings(userId: string): UserSettings {
+const DEFAULT_APP_SETTINGS: Omit<AppSettings, 'userId' | 'updatedAt'> = {
+    theme: 'light',
+    density: 'normal',
+    themeAccent: 'blue',
+    statusColors: {
+        draft: '#94a3b8',
+        applied: '#3b82f6',
+        interviewing: '#f59e0b',
+        offer: '#10b981',
+        rejected: '#ef4444',
+    },
+    notifyFollowUp: true,
+    notifyOverdue: true,
+    notifyInterviewing: true,
+    defaultView: 'list',
+    pageSize: 10,
+    defaultFollowUpDays: 3,
+};
+
+export function getUserSettings(userId: string): AppSettings {
     const key = makeKey(userId, 'settings');
-    const stored = safeGet<Partial<UserSettings> | null>(key, null);
+    const stored = safeGet<Partial<AppSettings> | null>(key, null);
     return {
-        ...DEFAULT_SETTINGS,
+        ...DEFAULT_APP_SETTINGS,
         ...stored,
         userId,
         updatedAt: stored?.updatedAt ?? new Date().toISOString(),
-    };
+    } as AppSettings;
 }
 
-export function saveUserSettings(userId: string, settings: UserSettings): void {
+export function saveUserSettings(userId: string, settings: AppSettings): void {
     safeSet(makeKey(userId, 'settings'), settings);
 }
 

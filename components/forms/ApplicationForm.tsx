@@ -18,6 +18,7 @@ import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Button } from '@/components/ui/Button';
 import { FileUpload } from '@/components/ui/FileUpload';
+import { NavigationGuard } from '@/components/ui/NavigationGuard';
 import * as storageService from '@/services/storage/storageService';
 import type { Attachment } from '@/types';
 
@@ -25,7 +26,6 @@ import type { Attachment } from '@/types';
 
 type FormPhase =
     | 'idle'
-    | 'editing'
     | 'dirty'
     | 'saving'       // autosave
     | 'submitting'   // manual submit
@@ -40,6 +40,58 @@ const SECTIONS_KEY = 'form:sections:v1';
 const DRAFT_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000;
 const AUTOSAVE_MS = 900;
 const MAXWAIT_MS = 10_000;
+
+// ─── Intent Matrix (Phase 1) ──────────────────────────────────────────────────
+
+interface IntentConfig {
+    requiredFields: string[];
+    meaningfulFields: (keyof ApplicationFormValues)[];
+    defaultSections: SectionState;
+    defaultStatus: ApplicationFormValues['status'];
+}
+
+const INTENT_CONFIG: Record<ApplicationFormValues['recordIntent'], IntentConfig> = {
+    application: {
+        requiredFields: ['company', 'roleTitle'],
+        meaningfulFields: ['company', 'roleTitle', 'strategicNotes'],
+        defaultSections: { core: true, context: true, outreach: false, attachments: false },
+        defaultStatus: 'applied',
+    },
+    outreach: {
+        requiredFields: [], // Soft-handled in Zod
+        meaningfulFields: ['contactName', 'company', 'subjectLineUsed', 'valuePitchSummary'],
+        defaultSections: { core: true, context: false, outreach: true, attachments: false },
+        defaultStatus: 'draft',
+    },
+    recruiter: {
+        requiredFields: [],
+        meaningfulFields: ['recruiterName', 'company', 'strategicNotes'],
+        defaultSections: { core: true, context: true, outreach: false, attachments: false },
+        defaultStatus: 'draft',
+    },
+    networking: {
+        requiredFields: [],
+        meaningfulFields: ['contactName', 'strategicNotes'],
+        defaultSections: { core: true, context: false, outreach: true, attachments: false },
+        defaultStatus: 'draft',
+    },
+    followup: {
+        requiredFields: ['nextFollowUp'],
+        meaningfulFields: ['nextFollowUp', 'strategicNotes'],
+        defaultSections: { core: true, context: false, outreach: true, attachments: false },
+        defaultStatus: 'interviewing',
+    },
+};
+
+function hasMeaningfulData(values: ApplicationFormValues, intent: ApplicationFormValues['recordIntent']): boolean {
+    const config = INTENT_CONFIG[intent];
+    return config.meaningfulFields.some((field) => {
+        const val = values[field];
+        if (typeof val === 'string') return !!val.trim();
+        if (typeof val === 'boolean') return val;
+        return !!val;
+    });
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -131,12 +183,16 @@ const StatusStrip = memo(function StatusStrip({
     const [, setTick] = useState(0);
     useEffect(() => {
         if (phase !== 'saved' || !savedMs) return;
-        const id = setInterval(() => setTick((t) => t + 1), 30_000);
+        const id = setInterval(() => {
+            if (document.visibilityState === 'visible') {
+                setTick((t) => t + 1);
+            }
+        }, 30_000);
         return () => clearInterval(id);
     }, [phase, savedMs]);
 
     const content: Record<FormPhase, { text: string; icon: React.ReactNode; cls: string; retry?: boolean } | null> = {
-        idle: null, editing: null,
+        idle: null,
         dirty: { text: 'Unsaved changes', icon: <Clock className="w-3.5 h-3.5" />, cls: 'text-neutral-400' },
         saving: { text: 'Saving…', icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />, cls: 'text-neutral-400' },
         submitting: { text: 'Saving…', icon: <RefreshCw className="w-3.5 h-3.5 animate-spin" />, cls: 'text-blue-500' },
@@ -265,6 +321,7 @@ export function ApplicationForm({
     const [attachments, setAttachments] = useState<Attachment[]>(initialAttachments);
     const [formPhaseState, setFormPhaseState] = useState<FormPhase>('idle');
     const formPhaseRef = useRef<FormPhase>('idle');
+    const followUpRef = useRef<HTMLDivElement>(null);
     const [lastSavedMs, setLastSavedMs] = useState<number | null>(null);
     const [draftBanner, setDraftBanner] = useState<{ savedAt: number } | null>(null);
     const [sections, setSections] = useState<SectionState>(readSections);
@@ -285,19 +342,31 @@ export function ApplicationForm({
     const {
         register, handleSubmit, watch, setValue, reset, getValues,
         formState: { errors, isSubmitting, isDirty },
+        control,
+        clearErrors,
     } = useForm<ApplicationFormValues>({
         resolver: zodResolver(applicationSchema) as Resolver<ApplicationFormValues>,
         defaultValues: {
+            recordIntent: 'application',
             company: '', roleTitle: '', source: '', jobPostingUrl: '', jobId: '',
             location: '', resumeVersion: '', actionDate: today, status: 'applied',
             nextFollowUp: '', strategicNotes: '', subjectLineUsed: '', valuePitchSummary: '',
             personalizationNotes: '', replyReceived: false, followUpSent: false,
             emailType: '', linkedContactIds: [],
             referralContact: '', recruiterName: '',
+            contactName: '', contactEmail: '',
             ...defaultValues,
         },
     });
-    const watchedValues = watch();
+
+    const recordIntent = watch('recordIntent');
+    const source = watch('source');
+    const nextFollowUp = watch('nextFollowUp');
+    const strategicNotes = watch('strategicNotes');
+    const valuePitchSummary = watch('valuePitchSummary');
+    const personalizationNotes = watch('personalizationNotes');
+    const replyReceived = watch('replyReceived');
+    const followUpSent = watch('followUpSent');
 
     // ── Dirty → phase + parent notify ────────────────────────────────────────
     useEffect(() => {
@@ -307,13 +376,7 @@ export function ApplicationForm({
         }
     }, [isDirty, onDirtyChange, setFormPhase]);
 
-    // ── Beforeunload guard ────────────────────────────────────────────────────
-    useEffect(() => {
-        if (!isDirty) return;
-        const handler = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
-        window.addEventListener('beforeunload', handler);
-        return () => window.removeEventListener('beforeunload', handler);
-    }, [isDirty]);
+    // ── Beforeunload guard (handled by NavigationGuard now) ──────────────────
 
     // ── Cleanup on unmount ────────────────────────────────────────────────────
     useEffect(() => {
@@ -350,7 +413,7 @@ export function ApplicationForm({
         if (formPhaseRef.current === 'submitting') return;
         if (lastSubmittedAtRef.current > scheduledAt) return; // monotonic safety
         const values = getValues();
-        if (!values.company && !values.roleTitle) return;
+        if (!hasMeaningfulData(values, values.recordIntent)) return;
         setFormPhase('saving');
         try {
             storageService.saveApplicationDraft(userId, draftId, {
@@ -386,12 +449,15 @@ export function ApplicationForm({
         }, AUTOSAVE_MS);
     }, [isEditing, doAutosave]);
 
-    // Trigger autosave on value changes while dirty
+    // Trigger autosave via subscription (Phase 0.3)
     useEffect(() => {
-        if (!isDirty || isEditing || formPhaseRef.current === 'submitting') return;
-        scheduleAutosave();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [watchedValues]);
+        if (isEditing) return;
+        const subscription = watch(() => {
+            if (formPhaseRef.current === 'submitting') return;
+            scheduleAutosave();
+        });
+        return () => subscription.unsubscribe();
+    }, [watch, isEditing, scheduleAutosave]);
 
     const retryAutosave = useCallback(() => { setFormPhase('dirty'); scheduleAutosave(); }, [setFormPhase, scheduleAutosave]);
 
@@ -423,208 +489,286 @@ export function ApplicationForm({
     }, [reset, userId, draftId, setFormPhase]);
 
     // ── NextFollowUp field helpers ────────────────────────────────────────────
-    const nextFollowUpValue = watchedValues.nextFollowUp ?? '';
     const handleFollowUpChange = useCallback((v: string) => {
         setValue('nextFollowUp', v, { shouldDirty: true, shouldValidate: true });
     }, [setValue]);
 
+    const handleIntentChange = useCallback((intent: ApplicationFormValues['recordIntent']) => {
+        const config = INTENT_CONFIG[intent];
+        setValue('recordIntent', intent, { shouldDirty: true });
+
+        // Phase 4: Adaptive Section Intelligence
+        setSections(config.defaultSections);
+
+        // Phase 5: Status Intelligence
+        setValue('status', config.defaultStatus);
+
+        // Phase 7: Validation Error Cleanup
+        clearErrors();
+
+        // Phase 6: Follow-up Mode Elevation
+        if (intent === 'followup') {
+            setTimeout(() => {
+                followUpRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }, 100);
+        }
+    }, [setValue, clearErrors]);
+
     // ─────────────────────────────────────────────────────────────────────────
 
     return (
-        <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6" noValidate>
+        <>
+            <NavigationGuard when={isDirty && formPhaseRef.current !== 'submitting'} />
+            <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6" noValidate>
 
-            {/* ── Draft restored banner ──────────────────────────────── */}
-            {draftBanner && !isEditing && (
-                <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
-                    <Clock className="w-4 h-4 shrink-0" />
-                    <span>
-                        Draft restored
-                        {draftBanner.savedAt
-                            ? ` · Saved at ${new Date(draftBanner.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
-                            : ''}
-                    </span>
-                    <button
-                        type="button" onClick={handleReset}
-                        className="ml-auto text-amber-600 hover:text-amber-800 font-medium flex items-center gap-1 text-xs"
-                    >
-                        Clear draft
-                    </button>
+                {/* ── Phase 2: Intent Switcher ───────────────────────────── */}
+                <div className="bg-neutral-50 p-1 rounded-xl border border-neutral-200 flex flex-wrap gap-1">
+                    {(['application', 'outreach', 'recruiter', 'networking', 'followup'] as const).map((intent) => (
+                        <button
+                            key={intent}
+                            type="button"
+                            onClick={() => handleIntentChange(intent)}
+                            className={cn(
+                                'flex-1 min-w-[100px] px-3 py-2 rounded-lg text-xs font-semibold capitalize transition-all duration-200',
+                                recordIntent === intent
+                                    ? 'bg-white text-blue-700 shadow-sm border border-neutral-200'
+                                    : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-100 border border-transparent'
+                            )}
+                        >
+                            {intent}
+                        </button>
+                    ))}
                 </div>
-            )}
 
-            {/* ── SECTION 1: Core Application ────────────────────────── */}
-            <div>
-                <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
-                    Core Application
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label="Company" placeholder="e.g. Acme Corp" required
-                        {...register('company')} error={errors.company?.message} />
-                    <Input label="Role Title" placeholder="e.g. Senior Software Engineer" required
-                        {...register('roleTitle')} error={errors.roleTitle?.message} />
-                    <Input label="Action Date" type="date" required
-                        {...register('actionDate')} error={errors.actionDate?.message} />
-                    <Select label="Current Status" options={STATUS_OPTIONS} required
-                        {...register('status')} error={errors.status?.message} />
-                </div>
-                <div className="mt-4">
-                    <FollowUpField
-                        value={nextFollowUpValue}
-                        onChange={handleFollowUpChange}
-                        error={errors.nextFollowUp?.message}
-                        minDate={today}
-                    />
-                </div>
-            </div>
+                {/* ── Draft restored banner ──────────────────────────────── */}
+                {draftBanner && !isEditing && (
+                    <div className="flex items-center gap-2 px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                        <Clock className="w-4 h-4 shrink-0" />
+                        <span>
+                            Draft restored
+                            {draftBanner.savedAt
+                                ? ` · Saved at ${new Date(draftBanner.savedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                                : ''}
+                        </span>
+                        <button
+                            type="button" onClick={handleReset}
+                            className="ml-auto text-amber-600 hover:text-amber-800 font-medium flex items-center gap-1 text-xs"
+                        >
+                            Clear draft
+                        </button>
+                    </div>
+                )}
 
-            {/* ── SECTION 2: Application Context ─────────────────────── */}
-            <CollapsibleSection title="Application Context" open={sections.context} onToggle={() => toggleSection('context')}>
-                {/* Source quick-chips */}
-                <div className="mb-4">
-                    <p className="text-xs font-medium text-neutral-500 mb-2">Quick Source</p>
-                    <div className="flex flex-wrap gap-1.5">
-                        {(['LinkedIn', 'Referral', 'Recruiter', 'Job Board', 'Company Website', 'Networking'] as const).map((s) => (
-                            <button
-                                key={s} type="button"
-                                onClick={() => setValue('source', s, { shouldDirty: true })}
-                                className={cn(
-                                    'h-7 px-2.5 rounded-full text-[12px] font-medium border transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
-                                    watchedValues.source === s
-                                        ? 'bg-blue-600 border-blue-600 text-white'
-                                        : 'border-neutral-200 text-neutral-600 hover:border-blue-400 hover:text-blue-700 bg-white'
-                                )}
-                            >{s}</button>
-                        ))}
+                {/* ── SECTION 1: Core Content (Intent-Aware) ──────────────── */}
+                <div className="space-y-4">
+                    <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+                        {recordIntent === 'application' ? 'Core Application' : (recordIntent === 'recruiter' ? 'Recruiter Context' : 'Core Connection')}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Dynamic Field Promotion (Phase 3.3 & 4.1) */}
+                        {(recordIntent === 'outreach' || recordIntent === 'networking') && (
+                            <>
+                                <Input label="Contact Name" placeholder="Who are you talking to?"
+                                    {...register('contactName')} error={errors.contactName?.message} />
+                                <Input label="Contact Email (optional)" placeholder="email@example.com"
+                                    {...register('contactEmail')} error={errors.contactEmail?.message} />
+                            </>
+                        )}
+
+                        {recordIntent === 'recruiter' && (
+                            <>
+                                <Input label="Recruiter Name" placeholder="e.g. John Smith"
+                                    {...register('recruiterName')} error={errors.recruiterName?.message} />
+                                <Input label="Agency / Company" placeholder="e.g. Hired Inc"
+                                    {...register('company')} error={errors.company?.message} />
+                            </>
+                        )}
+
+                        {recordIntent === 'application' && (
+                            <>
+                                <Input label="Company" placeholder="e.g. Acme Corp" required
+                                    {...register('company')} error={errors.company?.message} />
+                                <Input label="Role Title" placeholder="e.g. Senior Software Engineer" required
+                                    {...register('roleTitle')} error={errors.roleTitle?.message} />
+                            </>
+                        )}
+
+                        {/* Standard secondary fields */}
+                        {recordIntent !== 'recruiter' && recordIntent !== 'application' && (
+                            <Input label="Company" placeholder="e.g. Acme Corp"
+                                {...register('company')} error={errors.company?.message} />
+                        )}
+
+                        <Input label="Action Date" type="date" required
+                            {...register('actionDate')} error={errors.actionDate?.message} />
+                        <Select label="Current Status" options={STATUS_OPTIONS} required
+                            {...register('status')} error={errors.status?.message} />
+
+                        {/* Show Role Title as secondary for connection intents */}
+                        {recordIntent !== 'application' && (
+                            <Input label="Role Title (optional)" placeholder="e.g. Target Position"
+                                {...register('roleTitle')} error={errors.roleTitle?.message} />
+                        )}
+                    </div>
+                    <div className="mt-4" ref={followUpRef}>
+                        <FollowUpField
+                            value={nextFollowUp || ''}
+                            onChange={handleFollowUpChange}
+                            error={errors.nextFollowUp?.message}
+                            minDate={today}
+                        />
                     </div>
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Select label="Application Source" options={SOURCE_OPTIONS}
-                        {...register('source')} error={errors.source?.message} />
-                    <Input label="Job Posting URL" type="url" placeholder="https://..."
-                        {...register('jobPostingUrl')} error={errors.jobPostingUrl?.message} />
-                    <Input label="Job ID / Req #" placeholder="e.g. JR-12345"
-                        {...register('jobId')} error={errors.jobId?.message} />
-                    <Input label="Location" placeholder="e.g. Remote, New York, NY"
-                        {...register('location')} error={errors.location?.message} />
-                    <Input label="Resume Version" placeholder="e.g. v3-senior-eng"
-                        {...register('resumeVersion')} error={errors.resumeVersion?.message} />
-                </div>
-                {/* Source-contextual: Referral contact */}
-                <AnimatePresence initial={false}>
-                    {watchedValues.source === 'Referral' && (
-                        <motion.div
-                            key="referralContact"
-                            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
+
+                {/* ── SECTION 2: Application Context ─────────────────────── */}
+                <CollapsibleSection title="Application Context" open={sections.context} onToggle={() => toggleSection('context')}>
+                    {/* Source quick-chips */}
+                    <div className="mb-4">
+                        <p className="text-xs font-medium text-neutral-500 mb-2">Quick Source</p>
+                        <div className="flex flex-wrap gap-1.5">
+                            {(['LinkedIn', 'Referral', 'Recruiter', 'Job Board', 'Company Website', 'Networking'] as const).map((s) => (
+                                <button
+                                    key={s} type="button"
+                                    onClick={() => setValue('source', s, { shouldDirty: true })}
+                                    className={cn(
+                                        'h-7 px-2.5 rounded-full text-[12px] font-medium border transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
+                                        source === s
+                                            ? 'bg-blue-600 border-blue-600 text-white'
+                                            : 'border-neutral-200 text-neutral-600 hover:border-blue-400 hover:text-blue-700 bg-white'
+                                    )}
+                                >{s}</button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Select label="Application Source" options={SOURCE_OPTIONS}
+                            {...register('source')} error={errors.source?.message} />
+                        <Input label="Job Posting URL" type="url" placeholder="https://..."
+                            {...register('jobPostingUrl')} error={errors.jobPostingUrl?.message} />
+                        <Input label="Job ID / Req #" placeholder="e.g. JR-12345"
+                            {...register('jobId')} error={errors.jobId?.message} />
+                        <Input label="Location" placeholder="e.g. Remote, New York, NY"
+                            {...register('location')} error={errors.location?.message} />
+                        <Input label="Resume Version" placeholder="e.g. v3-senior-eng"
+                            {...register('resumeVersion')} error={errors.resumeVersion?.message} />
+                    </div>
+                    {/* Source-contextual: Referral contact */}
+                    <AnimatePresence initial={false}>
+                        {source === 'Referral' && (
+                            <motion.div
+                                key="referralContact"
+                                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                className="overflow-hidden"
+                            >
+                                <div className="pt-4">
+                                    <Input
+                                        label="Referral Contact (optional)"
+                                        placeholder="Who referred you?"
+                                        {...register('referralContact')}
+                                        error={errors.referralContact?.message}
+                                    />
+                                    <p className="mt-1 text-xs text-neutral-400">Name of the person who referred you to this role.</p>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    {/* Source-contextual: Recruiter name */}
+                    <AnimatePresence initial={false}>
+                        {source === 'Recruiter' && (
+                            <motion.div
+                                key="recruiterName"
+                                initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                className="overflow-hidden"
+                            >
+                                <div className="pt-4">
+                                    <Input
+                                        label="Recruiter Name (optional)"
+                                        placeholder="Recruiter or agency name"
+                                        {...register('recruiterName')}
+                                        error={errors.recruiterName?.message}
+                                    />
+                                    <p className="mt-1 text-xs text-neutral-400">Name of the recruiter or staffing agency.</p>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                    <div className="mt-4">
+                        <Textarea
+                            label="Strategic Notes" placeholder="Key context, connections, company insights..."
+                            autoResize maxChars={5000}
+                            value={strategicNotes || ''}
+                            onChange={(e) => setValue('strategicNotes', e.target.value, { shouldDirty: true })}
+                            error={errors.strategicNotes?.message}
+                        />
+                    </div>
+                </CollapsibleSection>
+
+                {/* ── SECTION 3: Outreach Intelligence ───────────────────── */}
+                <CollapsibleSection title="Outreach Intelligence" open={sections.outreach} onToggle={() => toggleSection('outreach')}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <Input label="Subject Line Used" placeholder="Email subject line"
+                            {...register('subjectLineUsed')} error={errors.subjectLineUsed?.message} />
+                        <Select label="Email Type" options={EMAIL_TYPE_OPTIONS}
+                            {...register('emailType')} error={errors.emailType?.message} />
+                    </div>
+                    <div className="mt-4 space-y-4">
+                        <Textarea
+                            label="Value Pitch Summary" placeholder="Key value propositions pitched..."
+                            autoResize maxChars={2000}
+                            value={valuePitchSummary || ''}
+                            onChange={(e) => setValue('valuePitchSummary', e.target.value, { shouldDirty: true })}
+                            error={errors.valuePitchSummary?.message}
+                        />
+                        <Textarea
+                            label="Personalization Notes" placeholder="How you personalized the outreach..."
+                            autoResize maxChars={2000}
+                            value={personalizationNotes || ''}
+                            onChange={(e) => setValue('personalizationNotes', e.target.value, { shouldDirty: true })}
+                            error={errors.personalizationNotes?.message}
+                        />
+                    </div>
+                    <div className="mt-4 flex flex-wrap gap-6">
+                        <Checkbox checked={!!replyReceived}
+                            onChange={(e) => setValue('replyReceived', e.target.checked, { shouldDirty: true })}
+                            label="Reply received" />
+                        <Checkbox checked={!!followUpSent}
+                            onChange={(e) => setValue('followUpSent', e.target.checked, { shouldDirty: true })}
+                            label="Follow-up sent" />
+                    </div>
+                </CollapsibleSection>
+
+                {/* ── SECTION 4: Attachments ──────────────────────────────── */}
+                <CollapsibleSection title="Attachments" open={sections.attachments} onToggle={() => toggleSection('attachments')}>
+                    <FileUpload attachments={attachments} onChange={setAttachments} />
+                </CollapsibleSection>
+
+                {/* ── Footer: status + actions ────────────────────────────── */}
+                <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                    <StatusStrip
+                        phase={formPhaseState}
+                        savedMs={lastSavedMs}
+                        onRetry={retryAutosave}
+                    />
+                    <div className="flex items-center gap-3">
+                        {onCancel && (
+                            <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
+                        )}
+                        {!isEditing && (
+                            <Button type="button" variant="outline" onClick={handleReset}>Reset</Button>
+                        )}
+                        <Button
+                            type="submit"
+                            isLoading={isSubmitting || formPhaseState === 'submitting'}
+                            disabled={isSubmitting || formPhaseState === 'submitting'}
+                            leftIcon={<Save className="w-4 h-4" />}
                         >
-                            <div className="pt-4">
-                                <Input
-                                    label="Referral Contact (optional)"
-                                    placeholder="Who referred you?"
-                                    {...register('referralContact')}
-                                    error={errors.referralContact?.message}
-                                />
-                                <p className="mt-1 text-xs text-neutral-400">Name of the person who referred you to this role.</p>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-                {/* Source-contextual: Recruiter name */}
-                <AnimatePresence initial={false}>
-                    {watchedValues.source === 'Recruiter' && (
-                        <motion.div
-                            key="recruiterName"
-                            initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.2, ease: 'easeInOut' }}
-                            className="overflow-hidden"
-                        >
-                            <div className="pt-4">
-                                <Input
-                                    label="Recruiter Name (optional)"
-                                    placeholder="Recruiter or agency name"
-                                    {...register('recruiterName')}
-                                    error={errors.recruiterName?.message}
-                                />
-                                <p className="mt-1 text-xs text-neutral-400">Name of the recruiter or staffing agency.</p>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
-                <div className="mt-4">
-                    <Textarea
-                        label="Strategic Notes" placeholder="Key context, connections, company insights..."
-                        autoResize maxChars={5000}
-                        value={watchedValues.strategicNotes}
-                        onChange={(e) => setValue('strategicNotes', e.target.value, { shouldDirty: true })}
-                        error={errors.strategicNotes?.message}
-                    />
+                            {isEditing ? 'Save Changes' : 'Save Application'}
+                        </Button>
+                    </div>
                 </div>
-            </CollapsibleSection>
-
-            {/* ── SECTION 3: Outreach Intelligence ───────────────────── */}
-            <CollapsibleSection title="Outreach Intelligence" open={sections.outreach} onToggle={() => toggleSection('outreach')}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <Input label="Subject Line Used" placeholder="Email subject line"
-                        {...register('subjectLineUsed')} error={errors.subjectLineUsed?.message} />
-                    <Select label="Email Type" options={EMAIL_TYPE_OPTIONS}
-                        {...register('emailType')} error={errors.emailType?.message} />
-                </div>
-                <div className="mt-4 space-y-4">
-                    <Textarea
-                        label="Value Pitch Summary" placeholder="Key value propositions pitched..."
-                        autoResize maxChars={2000}
-                        value={watchedValues.valuePitchSummary}
-                        onChange={(e) => setValue('valuePitchSummary', e.target.value, { shouldDirty: true })}
-                        error={errors.valuePitchSummary?.message}
-                    />
-                    <Textarea
-                        label="Personalization Notes" placeholder="How you personalized the outreach..."
-                        autoResize maxChars={2000}
-                        value={watchedValues.personalizationNotes}
-                        onChange={(e) => setValue('personalizationNotes', e.target.value, { shouldDirty: true })}
-                        error={errors.personalizationNotes?.message}
-                    />
-                </div>
-                <div className="mt-4 flex flex-wrap gap-6">
-                    <Checkbox checked={watchedValues.replyReceived}
-                        onChange={(e) => setValue('replyReceived', e.target.checked, { shouldDirty: true })}
-                        label="Reply received" />
-                    <Checkbox checked={watchedValues.followUpSent}
-                        onChange={(e) => setValue('followUpSent', e.target.checked, { shouldDirty: true })}
-                        label="Follow-up sent" />
-                </div>
-            </CollapsibleSection>
-
-            {/* ── SECTION 4: Attachments ──────────────────────────────── */}
-            <CollapsibleSection title="Attachments" open={sections.attachments} onToggle={() => toggleSection('attachments')}>
-                <FileUpload attachments={attachments} onChange={setAttachments} />
-            </CollapsibleSection>
-
-            {/* ── Footer: status + actions ────────────────────────────── */}
-            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                <StatusStrip
-                    phase={formPhaseState}
-                    savedMs={lastSavedMs}
-                    onRetry={retryAutosave}
-                />
-                <div className="flex items-center gap-3">
-                    {onCancel && (
-                        <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
-                    )}
-                    {!isEditing && (
-                        <Button type="button" variant="outline" onClick={handleReset}>Reset</Button>
-                    )}
-                    <Button
-                        type="submit"
-                        isLoading={isSubmitting || formPhaseState === 'submitting'}
-                        disabled={isSubmitting || formPhaseState === 'submitting'}
-                        leftIcon={<Save className="w-4 h-4" />}
-                    >
-                        {isEditing ? 'Save Changes' : 'Save Application'}
-                    </Button>
-                </div>
-            </div>
-        </form>
+            </form>
+        </>
     );
 }

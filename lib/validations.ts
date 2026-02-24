@@ -35,9 +35,22 @@ export const resetPasswordSchema = z.object({
     path: ['confirmPassword'],
 });
 
+export const SOURCE_VALUES = {
+    LINKEDIN: 'LinkedIn',
+    COMPANY_WEBSITE: 'Company Website',
+    REFERRAL: 'Referral',
+    JOB_BOARD: 'Job Board',
+    ANGEL_LIST: 'AngelList',
+    RECRUITER: 'Recruiter',
+    NETWORKING: 'Networking',
+} as const;
+
+const trimmedString = z.string().trim();
+
 export const applicationSchema = z.object({
-    company: z.string().min(1, 'Company name is required').max(200),
-    roleTitle: z.string().min(1, 'Role title is required').max(200),
+    recordIntent: z.enum(['application', 'outreach', 'recruiter', 'networking', 'followup']).default('application'),
+    company: z.string().max(200).optional().default(''),
+    roleTitle: z.string().max(200).optional().default(''),
     source: z.string().max(100).default(''),
     jobPostingUrl: z.string().url('Must be a valid URL').or(z.literal('')).default(''),
     jobId: z.string().max(100).default(''),
@@ -54,13 +67,51 @@ export const applicationSchema = z.object({
     followUpSent: z.boolean().optional().default(false),
     emailType: z.enum(['cold_outreach', 'follow_up', 'thank_you', 'referral', 'application_confirmation', '']).default(''),
     linkedContactIds: z.array(z.string()).default([]),
-    // Source-contextual fields
-    referralContact: z.string().trim().max(200).optional(),
-    recruiterName: z.string().trim().max(200).optional(),
+    // Source-contextual & Intent-aware fields
+    referralContact: trimmedString.max(200).optional(),
+    recruiterName: trimmedString.max(200).optional(),
+    contactName: trimmedString.max(200).optional(),
+    contactEmail: z.string().email('Valid email required').or(z.literal('')).optional().default(''),
 }).superRefine((data, ctx) => {
-    // Cross-field: nextFollowUp must be on or after actionDate
-    if (data.nextFollowUp && data.actionDate) {
-        if (data.nextFollowUp < data.actionDate) {
+    const { recordIntent, company, roleTitle, contactName, recruiterName, nextFollowUp, actionDate } = data;
+    const hasCompany = !!company?.trim();
+
+    // 1. Intent-scoped Validation Matrix (Phase 2)
+    switch (recordIntent) {
+        case 'application':
+            if (!hasCompany) {
+                ctx.addIssue({ code: 'custom', path: ['company'], message: 'Company name is required for applications' });
+            }
+            if (!roleTitle?.trim()) {
+                ctx.addIssue({ code: 'custom', path: ['roleTitle'], message: 'Role title is required for applications' });
+            }
+            break;
+
+        case 'outreach':
+        case 'networking':
+            // Require at least Contact Name OR Company (Soft Requirement)
+            if (!contactName?.trim() && !hasCompany) {
+                ctx.addIssue({ code: 'custom', path: ['contactName'], message: 'Contact name or company is required' });
+            }
+            break;
+
+        case 'recruiter':
+            // Require at least Recruiter Name OR Company
+            if (!recruiterName?.trim() && !hasCompany) {
+                ctx.addIssue({ code: 'custom', path: ['recruiterName'], message: 'Recruiter name or company is required' });
+            }
+            break;
+
+        case 'followup':
+            if (!nextFollowUp?.trim()) {
+                ctx.addIssue({ code: 'custom', path: ['nextFollowUp'], message: 'Follow-up date is required for this intent' });
+            }
+            break;
+    }
+
+    // 2. Cross-field: nextFollowUp must be on or after actionDate
+    if (nextFollowUp && actionDate) {
+        if (nextFollowUp < actionDate) {
             ctx.addIssue({
                 code: 'custom',
                 path: ['nextFollowUp'],

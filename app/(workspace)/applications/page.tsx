@@ -5,7 +5,6 @@ import {
     useEffect,
 } from 'react';
 import { useRouter } from 'next/navigation';
-import { useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/lib/authContext';
 import { useApplications } from '@/hooks/useApplications';
@@ -18,7 +17,7 @@ import {
     cn,
     generateId,
 } from '@/lib/utils';
-import type { Application, ApplicationStatus, UrgencyLevel } from '@/types';
+import type { Application, ApplicationStatus, AppSettings, UrgencyLevel } from '@/types';
 import type { ApplicationFormValues } from '@/lib/validations';
 import type { Attachment } from '@/types';
 import {
@@ -43,20 +42,28 @@ type PageSize = typeof PAGE_SIZE_OPTIONS[number];
 const STORAGE_VIEW = 'job_crm:v1:pref:view';
 const STORAGE_PAGE_SIZE = 'job_crm:v1:pref:pageSize';
 
+const STIFF_SPRING = { type: 'spring', stiffness: 400, damping: 30 };
+const SMOOTH_SPRING = { type: 'spring', stiffness: 300, damping: 30 };
+
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; dot: string; pill: string }> = {
-    draft: { label: 'Draft', dot: 'bg-neutral-400', pill: 'bg-neutral-100 text-neutral-600 ring-neutral-200' },
-    applied: { label: 'Applied', dot: 'bg-blue-500', pill: 'bg-blue-50 text-blue-700 ring-blue-200' },
-    interviewing: { label: 'Interviewing', dot: 'bg-amber-500', pill: 'bg-amber-50 text-amber-700 ring-amber-200' },
-    offer: { label: 'Offer', dot: 'bg-emerald-500', pill: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
-    rejected: { label: 'Rejected', dot: 'bg-red-400', pill: 'bg-red-50 text-red-600 ring-red-200' },
+    draft: { label: 'Draft', dot: 'bg-neutral-400', pill: 'bg-neutral-100 text-neutral-600 ring-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.03)]' },
+    applied: { label: 'Applied', dot: 'bg-blue-500', pill: 'bg-blue-50/80 text-blue-700 ring-blue-200/60 shadow-[0_2px_8px_-2px_rgba(59,130,246,0.12)]' },
+    interviewing: { label: 'Interviewing', dot: 'bg-amber-500', pill: 'bg-amber-50/80 text-amber-700 ring-amber-200/60 shadow-[0_2px_8px_-2px_rgba(245,158,11,0.12)]' },
+    offer: { label: 'Offer', dot: 'bg-emerald-500', pill: 'bg-emerald-50/80 text-emerald-700 ring-emerald-200/60 shadow-[0_2px_8px_-2px_rgba(16,185,129,0.12)]' },
+    rejected: { label: 'Rejected', dot: 'bg-red-400', pill: 'bg-red-50/80 text-red-600 ring-red-200/60 shadow-[0_2px_8px_-2px_rgba(239,68,68,0.12)]' },
 };
 
 const URGENCY_CFG: Record<UrgencyLevel, { label: string; cls: string }> = {
-    critical: { label: 'Interview today', cls: 'text-amber-600 bg-amber-50 ring-1 ring-amber-200' },
-    overdue: { label: 'Overdue', cls: 'text-red-600 bg-red-50 ring-1 ring-red-200' },
-    due_today: { label: 'Due today', cls: 'text-blue-600 bg-blue-50 ring-1 ring-blue-200' },
+    critical: { label: 'Interview today', cls: 'text-amber-700 bg-amber-50/80 ring-1 ring-amber-200/60 shadow-sm' },
+    overdue: { label: 'Overdue', cls: 'text-red-700 bg-red-50/80 ring-1 ring-red-200/60 shadow-sm' },
+    due_today: { label: 'Due today', cls: 'text-blue-700 bg-blue-50/80 ring-1 ring-blue-200/60 shadow-sm' },
     normal: { label: '', cls: 'text-neutral-400' },
 };
+
+import { StatusPill } from '@/components/ui/StatusPill';
+import { IntentBadge } from '@/components/ui/IntentBadge';
+import { BatchStatusBar } from '@/components/pipeline/BatchStatusBar';
+import { useSettings } from '@/lib/settingsContext';
 
 // ─── Safe localStorage ────────────────────────────────────────────────────────
 
@@ -107,17 +114,8 @@ function exportToCSV(apps: Application[]) {
     URL.revokeObjectURL(url);
 }
 
-// ─── Status Pill ──────────────────────────────────────────────────────────────
+// StatusPill moved to shared UI primitive
 
-function StatusPill({ status }: { status: ApplicationStatus }) {
-    const cfg = STATUS_CONFIG[status];
-    return (
-        <span className={cn('inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full text-[11px] font-semibold uppercase tracking-wide ring-1 select-none', cfg.pill)}>
-            <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />
-            {cfg.label}
-        </span>
-    );
-}
 
 // ─── Next Step Cell ───────────────────────────────────────────────────────────
 
@@ -165,45 +163,57 @@ function Highlight({ text, query }: { text: string; query: string }) {
 
 interface RowActionsProps {
     appId: string;
+    isOpen: boolean;
+    onToggle: (open: boolean) => void;
     onDelete: (id: string) => void;
     onEdit: (id: string) => void;
     onView: (id: string) => void;
 }
 
-function RowActions({ appId, onDelete, onEdit, onView }: RowActionsProps) {
-    const [open, setOpen] = useState(false);
-    const btnRef = useRef<HTMLButtonElement>(null);
+function RowActions({ appId, isOpen, onToggle, onDelete, onEdit, onView }: RowActionsProps) {
     const items = [
-        { label: 'View details', Icon: Eye, action: () => { onView(appId); setOpen(false); } },
-        { label: 'Edit', Icon: Pencil, action: () => { onEdit(appId); setOpen(false); } },
-        { label: 'Delete', Icon: Trash2, action: () => { onDelete(appId); setOpen(false); }, danger: true },
+        { label: 'View Details', Icon: Eye, action: () => { onView(appId); onToggle(false); } },
+        { label: 'Edit Entry', Icon: Pencil, action: () => { onEdit(appId); onToggle(false); } },
+        { label: 'Delete Entry', Icon: Trash2, action: () => { onDelete(appId); onToggle(false); }, danger: true },
     ];
+
+    useEffect(() => {
+        if (!isOpen) return;
+        const handleEsc = (e: KeyboardEvent) => { if (e.key === 'Escape') onToggle(false); };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onToggle]);
+
     return (
         <div className="relative flex justify-end">
             <button
-                ref={btnRef}
                 type="button"
-                onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-                aria-label="Row actions" aria-haspopup="menu" aria-expanded={open}
+                onClick={(e) => { e.stopPropagation(); onToggle(!isOpen); }}
+                aria-label="Row actions" aria-haspopup="menu" aria-expanded={isOpen}
                 className={cn(
-                    'w-7 h-7 rounded-lg flex items-center justify-center transition-colors',
+                    'w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-200',
                     'text-neutral-400 outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
-                    open ? 'bg-neutral-100 text-neutral-700 opacity-100' : 'opacity-0 group-hover:opacity-100 hover:bg-neutral-100 hover:text-neutral-700'
+                    isOpen ? 'bg-neutral-900 text-white shadow-md' : 'opacity-0 group-hover:opacity-100 hover:bg-neutral-100 hover:text-neutral-700'
                 )}
             >
-                <MoreHorizontal style={{ width: 15, height: 15 }} />
+                <MoreHorizontal style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
             </button>
             <AnimatePresence>
-                {open && (
+                {isOpen && (
                     <>
-                        <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
+                        <div className="fixed inset-0 z-[100]" onClick={() => onToggle(false)} />
                         <motion.div
                             role="menu"
-                            initial={{ opacity: 0, scale: 0.95, y: -4 }}
+                            initial={{ opacity: 0, scale: 0.96, y: -4 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.95, y: -4 }}
-                            transition={{ duration: 0.1 }}
-                            className="absolute right-0 top-9 z-30 w-44 bg-white rounded-xl border border-neutral-100 shadow-lg shadow-neutral-200/60 overflow-hidden py-1"
+                            exit={{ opacity: 0, scale: 0.96, y: -4 }}
+                            transition={{ ...STIFF_SPRING }}
+                            className="fixed z-[101] w-48 bg-white rounded-xl border border-neutral-100 shadow-2xl shadow-neutral-200/60 overflow-hidden py-1.5"
+                            style={{
+                                top: 'auto',
+                                right: 'auto',
+                                transform: 'translate(-100%, 8px)' // This logic needs to be robust or simple enough
+                            }}
                             onClick={(e) => e.stopPropagation()}
                         >
                             {items.map(({ label, Icon, action, danger }) => (
@@ -213,12 +223,12 @@ function RowActions({ appId, onDelete, onEdit, onView }: RowActionsProps) {
                                     role="menuitem"
                                     onClick={() => { action(); }}
                                     className={cn(
-                                        'w-full flex items-center gap-2.5 px-3 py-2 text-left text-[13px] transition-colors',
+                                        'w-full flex items-center gap-2.5 px-3 py-2.5 text-left text-[13px] font-semibold transition-colors',
                                         'outline-none focus-visible:bg-neutral-50',
-                                        danger ? 'text-red-500 hover:bg-red-50' : 'text-neutral-700 hover:bg-neutral-50'
+                                        danger ? 'text-red-600 hover:bg-red-50' : 'text-neutral-700 hover:bg-neutral-50'
                                     )}
                                 >
-                                    <Icon style={{ width: 13, height: 13, strokeWidth: 1.75 }} /> {label}
+                                    <Icon style={{ width: 14, height: 14, strokeWidth: 2.5 }} /> {label}
                                 </button>
                             ))}
                         </motion.div>
@@ -229,25 +239,36 @@ function RowActions({ appId, onDelete, onEdit, onView }: RowActionsProps) {
     );
 }
 
+
 // ─── Table Row (memoized) ─────────────────────────────────────────────────────
 
 interface TableRowProps {
     app: Application;
     index: number;
+    isSelected: boolean;
+    isMenuOpen: boolean;
+    onToggleMenu: (open: boolean) => void;
     onDelete: (id: string) => void;
     onEdit: (id: string) => void;
     onView: (id: string) => void;
+    onToggleSelection: (id: string) => void;
+    isFocused?: boolean;
+    searchQuery?: string;
 }
 
 const TableRow = memo(function TableRow({
     app,
     index,
     isSelected,
+    isMenuOpen,
+    onToggleMenu,
     onDelete,
     onEdit,
     onView,
+    onToggleSelection,
+    isFocused,
     searchQuery = ''
-}: TableRowProps & { isSelected?: boolean; searchQuery?: string }) {
+}: TableRowProps) {
     const initials = getInitials(app.company);
     const palette = avatarPalette(app.company);
     const timeline = getTimelineText(app);
@@ -255,38 +276,59 @@ const TableRow = memo(function TableRow({
 
     return (
         <motion.tr
-            initial={{ opacity: 0, y: 4 }}
+            layout
+            initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.15, delay: Math.min(index * 0.025, 0.3) }}
+            exit={{ opacity: 0, scale: 0.98 }}
+            transition={{ ...SMOOTH_SPRING, delay: Math.min(index * 0.02, 0.2) }}
             onClick={() => onView(app.id)}
             className={cn(
-                'group relative cursor-pointer transition-colors duration-100 outline-none',
-                isSelected ? 'bg-blue-50/50' : 'hover:bg-neutral-50/80'
+                'group relative cursor-pointer transition-colors duration-150 outline-none',
+                isSelected ? 'bg-blue-50/60' : 'hover:bg-neutral-50/80',
+                isMenuOpen && 'bg-neutral-50/80 z-[50]',
+                isFocused && 'bg-blue-50/40 ring-1 ring-inset ring-blue-500/30'
             )}
+            style={{ zIndex: isMenuOpen ? 50 : 1 }}
         >
+            {/* Col 0: Checkbox */}
+            <td className="pl-5 pr-0 w-10">
+                <div className="flex items-center justify-center w-4 h-4" onClick={(e) => e.stopPropagation()}>
+                    <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                            onToggleSelection(app.id);
+                            e.stopPropagation();
+                        }}
+                        className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 transition-all cursor-pointer opacity-0 group-hover:opacity-100 checked:opacity-100"
+                    />
+                </div>
+            </td>
             {/* Col 1: Company & Role */}
-            <td className="px-5 py-4">
-                <div className="flex items-center gap-3 min-w-0">
+            <td className="pl-3 pr-4 py-3.5">
+                <div className="flex items-center gap-4 min-w-0">
                     <div
-                        className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-semibold select-none shadow-sm', palette)}
-                        style={{ fontSize: 12 }} aria-hidden="true"
+                        className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-bold select-none shadow-sm transition-transform group-hover:scale-105', palette)}
+                        style={{ fontSize: 13 }} aria-hidden="true"
                     >
                         {initials || <Building2 style={{ width: 14, height: 14 }} />}
                     </div>
                     <div className="min-w-0 flex-1">
-                        <p className="font-semibold text-neutral-900 truncate leading-tight" style={{ fontSize: 13.5 }} title={app.roleTitle}>
+                        <p className="font-bold text-neutral-900 truncate leading-tight" style={{ fontSize: 14 }} title={app.roleTitle}>
                             <Highlight text={app.roleTitle} query={searchQuery} />
                         </p>
-                        <div className="flex items-center gap-1.5 text-neutral-400 truncate mt-1" style={{ fontSize: 11.5 }}>
-                            <span className="truncate" title={app.company}><Highlight text={app.company} query={searchQuery} /></span>
+                        <div className="flex items-center gap-2 text-neutral-400 truncate mt-1" style={{ fontSize: 12 }}>
+                            <span className="font-medium text-neutral-500 truncate" title={app.company}>
+                                <Highlight text={app.company} query={searchQuery} />
+                            </span>
                             {app.source && (
-                                <span className="inline-flex items-center h-4 px-1.5 rounded-full bg-neutral-100 text-neutral-500 ring-1 ring-neutral-200 text-[10px]">
+                                <span className="inline-flex items-center h-4 px-1.5 rounded-md bg-neutral-100/80 text-neutral-500 text-[10px] font-bold uppercase tracking-tight">
                                     {app.source}
                                 </span>
                             )}
                             {app.location && (
                                 <>
-                                    <span className="text-neutral-200 mx-0.5">·</span>
+                                    <span className="text-neutral-200">·</span>
                                     <MapPin style={{ width: 10, height: 10 }} />
                                     <span className="truncate">{app.location}</span>
                                 </>
@@ -295,26 +337,37 @@ const TableRow = memo(function TableRow({
                     </div>
                 </div>
             </td>
-            {/* Col 2: Status */}
-            <td className="px-4 py-4"><StatusPill status={app.status} /></td>
-            {/* Col 3: Timeline */}
-            <td className="px-4 py-4 hidden md:table-cell">
-                <div className="flex items-center gap-1.5 text-neutral-400" style={{ fontSize: 12 }}>
-                    <CalendarClock style={{ width: 13, height: 13, strokeWidth: 1.75 }} /> {timeline}
+            {/* Col 2: Intent */}
+            <td className="px-4 py-3.5">
+                <IntentBadge intent={app.recordIntent || 'application'} />
+            </td>
+            {/* Col 3: Status */}
+            <td className="px-4 py-3.5"><StatusPill status={app.status} className="h-5.5" /></td>
+            {/* Col 4: Timeline */}
+            <td className="px-4 py-3.5 hidden md:table-cell">
+                <div className="flex items-center gap-1.5 text-neutral-400 font-medium" style={{ fontSize: 12 }}>
+                    <CalendarClock style={{ width: 14, height: 14, strokeWidth: 2 }} className="opacity-60" /> {timeline}
                 </div>
             </td>
-            {/* Col 4: Next Step */}
-            <td className="px-4 py-4 hidden lg:table-cell"><NextStepCell app={app} /></td>
-            {/* Col 5: Actions */}
-            <td className="px-4 py-4 w-12" onClick={(e) => e.stopPropagation()}>
-                <div className="flex items-center justify-end gap-2">
+            {/* Col 5: Next Step */}
+            <td className="px-4 py-3.5 hidden lg:table-cell"><NextStepCell app={app} /></td>
+            {/* Col 6: Actions */}
+            <td className="px-5 py-3.5 w-12 !overflow-visible" onClick={(e) => e.stopPropagation()}>
+                <div className="flex items-center justify-end gap-3 overflow-visible">
                     {attachmentCount > 0 && (
-                        <div className="flex items-center gap-0.5 text-neutral-400 mr-1" title={`${attachmentCount} attachments`}>
-                            <Paperclip style={{ width: 11, height: 11 }} />
-                            <span className="text-[10px] font-medium">{attachmentCount}</span>
+                        <div className="flex items-center gap-1 text-neutral-400 opacity-60 group-hover:opacity-100 transition-opacity" title={`${attachmentCount} attachments`}>
+                            <Paperclip style={{ width: 12, height: 12, strokeWidth: 2 }} />
+                            <span className="text-[10px] font-bold">{attachmentCount}</span>
                         </div>
                     )}
-                    <RowActions appId={app.id} onDelete={onDelete} onEdit={onEdit} onView={onView} />
+                    <RowActions
+                        appId={app.id}
+                        isOpen={isMenuOpen}
+                        onToggle={onToggleMenu}
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                        onView={onView}
+                    />
                 </div>
             </td>
         </motion.tr>
@@ -327,42 +380,86 @@ const TableRow = memo(function TableRow({
     prev.app.nextFollowUp === next.app.nextFollowUp &&
     prev.app.actionDate === next.app.actionDate &&
     prev.app.replyReceived === next.app.replyReceived &&
+    prev.app.recordIntent === next.app.recordIntent &&
+    prev.isSelected === next.isSelected &&
+    prev.isFocused === next.isFocused &&
+    prev.isMenuOpen === next.isMenuOpen &&
     prev.index === next.index &&
     prev.searchQuery === next.searchQuery
 );
 
+
 // ─── Mobile Card ──────────────────────────────────────────────────────────────
 
-const MobileCard = memo(function MobileCard({ app, onDelete, onEdit, onView }: { app: Application; onDelete: (id: string) => void; onEdit: (id: string) => void; onView: (id: string) => void }) {
+const MobileCard = memo(function MobileCard({
+    app, isSelected, onToggleSelection, onDelete, onEdit, onView
+}: {
+    app: Application;
+    isSelected: boolean;
+    onToggleSelection: (id: string) => void;
+    onDelete: (id: string) => void;
+    onEdit: (id: string) => void;
+    onView: (id: string) => void;
+}) {
+    const [isMenuOpen, setIsMenuOpen] = useState(false);
     return (
         <div
-            className="flex items-start gap-3 px-4 py-3.5 hover:bg-neutral-50 transition-colors cursor-pointer relative group"
+            className={cn(
+                'flex items-start gap-3 px-4 py-4 transition-all duration-200 cursor-pointer relative group border-b border-neutral-100/60 last:border-0',
+                isSelected ? 'bg-blue-50/60' : 'hover:bg-neutral-50/80 active:bg-neutral-100'
+            )}
             onClick={() => onView(app.id)}
             role="button" tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter') onView(app.id); }}
         >
-            <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center shrink-0 font-semibold text-xs', avatarPalette(app.company))}>
+            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 font-bold text-xs shadow-sm', avatarPalette(app.company))}>
                 {getInitials(app.company)}
             </div>
+
             <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                        <p className="font-semibold text-neutral-900 truncate" style={{ fontSize: 13 }}>{app.roleTitle}</p>
-                        <p className="text-neutral-400 truncate" style={{ fontSize: 11.5 }}>{app.company}</p>
+                        <p className="font-bold text-neutral-900 truncate leading-tight" style={{ fontSize: 13.5 }}>{app.roleTitle}</p>
+                        <p className="text-neutral-500 font-medium truncate mt-0.5" style={{ fontSize: 11.5 }}>{app.company}</p>
                     </div>
-                    <StatusPill status={app.status} />
                 </div>
-                <div className="flex items-center gap-3 mt-1.5">
+
+                <div className="flex items-center gap-2 mt-2">
+                    <StatusPill status={app.status} className="h-5 shrink-0" />
+                    <IntentBadge intent={app.recordIntent || 'application'} />
+                </div>
+
+                <div className="flex items-center gap-3 mt-3">
                     <NextStepCell app={app} />
-                    <span className="text-neutral-300 ml-auto" style={{ fontSize: 11 }}>{formatRelativeDate(app.actionDate)}</span>
+                    <span className="text-neutral-300 font-medium uppercase tracking-tighter ml-auto" style={{ fontSize: 9.5 }}>
+                        {formatRelativeDate(app.actionDate)}
+                    </span>
                 </div>
             </div>
-            <div className="absolute right-3 top-2" onClick={(e) => e.stopPropagation()}>
-                <RowActions appId={app.id} onDelete={onDelete} onEdit={onEdit} onView={onView} />
+
+            <div className="flex flex-col items-end gap-2 ml-2" onClick={(e) => e.stopPropagation()}>
+                <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onToggleSelection(app.id)}
+                    className={cn(
+                        'w-4 h-4 rounded-md border-neutral-300 text-neutral-900 focus:ring-neutral-900 transition-all mb-1',
+                        isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                    )}
+                />
+                <RowActions
+                    appId={app.id}
+                    isOpen={isMenuOpen}
+                    onToggle={setIsMenuOpen}
+                    onDelete={onDelete}
+                    onEdit={onEdit}
+                    onView={onView}
+                />
             </div>
         </div>
     );
 });
+
 
 // ─── List (Table) View ────────────────────────────────────────────────────────
 
@@ -376,13 +473,18 @@ interface ListViewProps {
     onCreate: () => void;
     search: string;
     debouncedSearch: string;
+    selectedIds: Set<string>;
+    toggleSelection: (id: string) => void;
+    toggleAll: (ids: string[]) => void;
+    openMenuId: string | null;
+    setOpenMenuId: (id: string | null) => void;
 }
 
-function ListView({ apps, isFiltered, onClear, onDelete, onEdit, onView, onCreate, search, debouncedSearch }: ListViewProps) {
+function ListView({
+    apps, isFiltered, onClear, onDelete, onEdit, onView, onCreate, search, debouncedSearch,
+    selectedIds, toggleSelection, toggleAll, openMenuId, setOpenMenuId, pageSize, saveGlobalSetting
+}: ListViewProps & { pageSize: number; saveGlobalSetting: (partial: Partial<AppSettings>) => void }) {
     const [page, setPage] = useState(1);
-    const [pageSize, setPageSize] = useState<PageSize>(() =>
-        Number(readStorage(STORAGE_PAGE_SIZE, '10')) as PageSize
-    );
     const [selectedIndex, setSelectedIndex] = useState(-1);
 
     const totalPages = Math.max(1, Math.ceil(apps.length / pageSize));
@@ -390,6 +492,10 @@ function ListView({ apps, isFiltered, onClear, onDelete, onEdit, onView, onCreat
     const paginated = apps.slice((safePage - 1) * pageSize, safePage * pageSize);
     const rangeStart = apps.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
     const rangeEnd = Math.min(safePage * pageSize, apps.length);
+
+    const handleToggleAll = useCallback(() => {
+        toggleAll(paginated.map((a) => a.id));
+    }, [paginated, toggleAll]);
 
     // Keyboard navigation
     useEffect(() => {
@@ -444,23 +550,34 @@ function ListView({ apps, isFiltered, onClear, onDelete, onEdit, onView, onCreat
     }
 
     return (
-        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
+        <div className="flex flex-col h-full bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
             {/* Desktop table */}
-            <div className="hidden md:block overflow-x-auto max-h-[calc(100vh-280px)] custom-scrollbar">
+            <div className="hidden md:block overflow-x-auto flex-1 min-h-0 custom-scrollbar">
                 <table className="w-full border-separate border-spacing-0" role="grid" aria-label="Job applications pipeline">
                     <thead className="sticky top-0 z-20">
                         <tr className="border-b border-neutral-100">
+                            <th scope="col" className="pl-5 pr-0 w-10 bg-neutral-50/60 backdrop-blur-sm">
+                                <div className="flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={paginated.length > 0 && selectedIds.size === paginated.length}
+                                        onChange={handleToggleAll}
+                                        className="w-4 h-4 rounded border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer"
+                                    />
+                                </div>
+                            </th>
                             {[
-                                { label: 'Company & Role', className: 'pl-5 pr-4 w-auto' },
+                                { label: 'Company & Role', className: 'pl-3 pr-4 w-auto' },
+                                { label: 'Intent', className: 'px-4 w-32' },
                                 { label: 'Status', className: 'px-4 w-40' },
                                 { label: 'Timeline', className: 'px-4 w-44 hidden md:table-cell' },
                                 { label: 'Next Step', className: 'px-4 w-40 hidden lg:table-cell' },
-                                { label: '', className: 'px-4 w-12' },
+                                { label: '', className: 'px-4 w-12 text-right' },
                             ].map(({ label, className }) => (
                                 <th
                                     key={label || 'actions'}
                                     scope="col"
-                                    className={cn('py-3 text-left text-[11px] font-semibold text-neutral-400 uppercase tracking-wider bg-neutral-50/60', className)}
+                                    className={cn('py-3 text-left text-[11px] font-semibold text-neutral-400 uppercase tracking-wider bg-neutral-50/60 backdrop-blur-sm', className)}
                                 >
                                     {label}
                                 </th>
@@ -473,7 +590,11 @@ function ListView({ apps, isFiltered, onClear, onDelete, onEdit, onView, onCreat
                                 key={app.id}
                                 app={app}
                                 index={i}
-                                isSelected={i === selectedIndex}
+                                isSelected={selectedIds.has(app.id)}
+                                isFocused={i === selectedIndex}
+                                isMenuOpen={openMenuId === app.id}
+                                onToggleMenu={(open) => setOpenMenuId(open ? app.id : null)}
+                                onToggleSelection={toggleSelection}
                                 onDelete={onDelete}
                                 onEdit={onEdit}
                                 onView={onView}
@@ -485,59 +606,73 @@ function ListView({ apps, isFiltered, onClear, onDelete, onEdit, onView, onCreat
             </div>
 
             {/* Mobile cards */}
-            <div className="md:hidden divide-y divide-neutral-100">
+            <div className="md:hidden divide-y divide-neutral-100 overflow-y-auto flex-1">
                 {paginated.map((app) => (
-                    <MobileCard key={app.id} app={app} onDelete={onDelete} onEdit={onEdit} onView={onView} />
+                    <MobileCard
+                        key={app.id}
+                        app={app}
+                        isSelected={selectedIds.has(app.id)}
+                        onToggleSelection={toggleSelection}
+                        onDelete={onDelete}
+                        onEdit={onEdit}
+                        onView={onView}
+                    />
                 ))}
             </div>
 
-            {/* Pagination footer */}
-            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-t border-neutral-100 bg-neutral-50/40 flex-wrap">
-                <div className="flex items-center gap-3">
+            {/* Pagination footer (Compact SaaS Style) */}
+            <footer className="flex items-center justify-between gap-3 px-5 h-12 border-t border-neutral-100 bg-white/80 backdrop-blur shrink-0">
+                <div className="flex items-center gap-4">
                     <span className="text-[12px] text-neutral-400 whitespace-nowrap">
                         {apps.length === 0 ? '0 results' : `${rangeStart}–${rangeEnd} of ${apps.length}`}
                     </span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="h-4 w-px bg-neutral-200 hidden sm:block" />
+                    <div className="hidden sm:flex items-center gap-2">
                         <span className="text-[12px] text-neutral-400">Rows</span>
                         <select
                             value={pageSize}
-                            onChange={(e) => { setPageSize(Number(e.target.value) as PageSize); writeStorage(STORAGE_PAGE_SIZE, e.target.value); setPage(1); }}
+                            onChange={(e) => {
+                                saveGlobalSetting({ pageSize: Number(e.target.value) });
+                                setPage(1);
+                            }}
                             aria-label="Rows per page"
-                            className="h-6 px-1.5 pr-5 rounded-md border border-neutral-200 bg-white text-[12px] text-neutral-600 outline-none appearance-none cursor-pointer"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 6px center' }}
+                            className="h-7 px-2 pr-6 rounded-lg border border-neutral-200 bg-white text-[12px] text-neutral-600 outline-none appearance-none cursor-pointer hover:border-neutral-300 transition-colors"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
                         >
                             {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </div>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 font-medium">
                     <button type="button" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={safePage <= 1}
                         aria-label="Previous page"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
                     >
                         <ChevronLeft style={{ width: 14, height: 14 }} />
                     </button>
-                    {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
-                        const pg = totalPages <= 5 ? i + 1 : safePage <= 3 ? i + 1 : safePage >= totalPages - 2 ? totalPages - 4 + i : safePage - 2 + i;
-                        return (
-                            <button
-                                key={pg} type="button" onClick={() => setPage(pg)}
-                                aria-label={`Page ${pg}`} aria-current={safePage === pg ? 'page' : undefined}
-                                className={cn('w-7 h-7 flex items-center justify-center rounded-lg text-[12px] font-medium transition-colors',
-                                    safePage === pg ? 'bg-blue-600 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100')}
-                            >
-                                {pg}
-                            </button>
-                        );
-                    })}
+                    <div className="flex items-center gap-1 px-1">
+                        {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                            const pg = totalPages <= 5 ? i + 1 : safePage <= 3 ? i + 1 : safePage >= totalPages - 2 ? totalPages - 4 + i : safePage - 2 + i;
+                            return (
+                                <button
+                                    key={pg} type="button" onClick={() => setPage(pg)}
+                                    aria-label={`Page ${pg}`} aria-current={safePage === pg ? 'page' : undefined}
+                                    className={cn('min-w-[32px] h-8 flex items-center justify-center rounded-lg text-[12px] transition-all',
+                                        safePage === pg ? 'bg-neutral-900 text-white shadow-sm' : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900')}
+                                >
+                                    {pg}
+                                </button>
+                            );
+                        })}
+                    </div>
                     <button type="button" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={safePage >= totalPages}
                         aria-label="Next page"
-                        className="w-7 h-7 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50 disabled:opacity-30 disabled:cursor-not-allowed transition-all shadow-sm active:scale-95"
                     >
                         <ChevronRight style={{ width: 14, height: 14 }} />
                     </button>
                 </div>
-            </div>
+            </footer>
         </div>
     );
 }
@@ -558,33 +693,33 @@ export default function PipelinePage() {
     const { user, isLoading } = useAuth();
     const { applications, createApplication, updateApplication, updateStatus, deleteApplication } = useApplications(user?.id ?? '');
     const { success, error: toastError } = useToast();
+    const { settings, updateSettings: saveGlobalSetting } = useSettings();
     const router = useRouter();
 
-    // ── View preference (persisted) ───────────────────────────────────────────
-    const [view, setView] = useState<ViewMode>(() =>
-        (readStorage(STORAGE_VIEW, 'list') as ViewMode)
-    );
+    const view = settings.defaultView;
     const setViewAndPersist = useCallback((v: ViewMode) => {
-        setView(v); writeStorage(STORAGE_VIEW, v);
-    }, []);
+        saveGlobalSetting({ defaultView: v });
+    }, [saveGlobalSetting]);
 
-    // ── Search / Filter state ─────────────────────────────────────────────────
-    const [statusFilter, setStatusFilter] = useState<ApplicationStatus | ''>('');
     const [search, setSearch] = useState('');
-    const debouncedSearch = useDebounce(search, 220);
+    const debouncedSearch = useDebounce(search, 300);
+    const [statusFilter, setStatusFilter] = useState<ApplicationStatus | ''>('');
+
+    const [modal, setModal] = useState<{ open: boolean; editId: string | null }>({ open: false, editId: null });
+    const [viewTarget, setViewTarget] = useState<Application | null>(null);
+
+    // Shared Selection & Menu State
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     const clearFilters = useCallback(() => { setSearch(''); setStatusFilter(''); }, []);
     const isFiltered = Boolean(search || statusFilter);
 
-    // ── Form modal state ──────────────────────────────────────────────────────
-    const [modal, setModal] = useState<{ open: boolean; editId?: string }>({ open: false });
-
-    const openCreate = useCallback(() => setModal({ open: true }), []);
+    // ── Handlers & Derived State ───────────────────────────────────────────
+    const openCreate = useCallback(() => setModal({ open: true, editId: null }), []);
     const openEdit = useCallback((id: string) => { setViewTarget(null); setModal({ open: true, editId: id }); }, []);
-    const closeModal = useCallback(() => setModal({ open: false }), []);
+    const closeModal = useCallback(() => setModal({ open: false, editId: null }), []);
 
-    // ── Detail drawer state ───────────────────────────────────────────────────
-    const [viewTarget, setViewTarget] = useState<Application | null>(null);
     const openView = useCallback((id: string) => {
         const app = applications.find((a) => a.id === id);
         if (app) setViewTarget(app);
@@ -647,6 +782,30 @@ export default function PipelinePage() {
         success('Coming soon', 'CSV import will be available soon');
     }, [success]);
 
+    const toggleSelection = useCallback((id: string) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+        });
+    }, []);
+
+    const toggleAll = useCallback((ids: string[]) => {
+        if (selectedIds.size === ids.length) setSelectedIds(new Set());
+        else setSelectedIds(new Set(ids));
+    }, [selectedIds.size]);
+
+    const handleBatchDelete = useCallback(() => {
+        if (window.confirm(`Delete ${selectedIds.size} applications?`)) {
+            selectedIds.forEach((id) => deleteApplication(id));
+            setSelectedIds(new Set());
+            success('Deleted', `${selectedIds.size} applications removed`);
+        }
+    }, [selectedIds, deleteApplication, success]);
+
+    const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
     // ─────────────────────────────────────────────────────────────────────────
 
     const SkeletonLoader = useMemo(() => {
@@ -656,21 +815,21 @@ export default function PipelinePage() {
     }, [view]);
 
     return (
-        <div className="max-w-7xl mx-auto">
+        <div className="h-screen flex flex-col overflow-hidden max-w-7xl mx-auto px-4">
 
-            {/* ── Header: Title + View Switcher + Command cluster ──── */}
-            <div className="flex flex-col gap-3 mb-6">
+            {/* ── Header: Title + View Switcher + Command cluster (Shrinkable) ──── */}
+            <header className="flex flex-col gap-4 py-6 shrink-0">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                     {/* Left: title */}
-                    <div>
-                        <h1 className="font-bold text-neutral-900 leading-none" style={{ fontSize: 20 }}>Pipeline</h1>
-                        <p className="text-neutral-400 mt-0.5" style={{ fontSize: 13 }}>
-                            {isLoading ? 'Loading…' : `${applications.length} application${applications.length !== 1 ? 's' : ''}`}
-                        </p>
+                    <div className="flex items-baseline gap-3">
+                        <h1 className="font-bold text-neutral-900 leading-none tracking-tight" style={{ fontSize: 24 }}>Pipeline</h1>
+                        <span className="text-neutral-400 font-medium" style={{ fontSize: 13 }}>
+                            {isLoading ? 'Loading…' : `${applications.length} total`}
+                        </span>
                     </div>
 
                     {/* Center: view switcher */}
-                    <div
+                    <nav
                         role="group"
                         aria-label="View mode"
                         className="flex items-center bg-neutral-100 rounded-xl p-1 gap-0.5"
@@ -684,42 +843,42 @@ export default function PipelinePage() {
                                 aria-label={label}
                                 aria-pressed={view === mode}
                                 className={cn(
-                                    'flex items-center gap-1.5 h-8 px-3 rounded-lg text-[13px] font-medium transition-all duration-150',
+                                    'flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[13px] font-semibold transition-all duration-200 select-none',
                                     'outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
                                     view === mode
-                                        ? 'bg-white text-neutral-900 shadow-sm'
-                                        : 'text-neutral-500 hover:text-neutral-700'
+                                        ? 'bg-white text-neutral-900 shadow-sm border border-neutral-200/50'
+                                        : 'text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50'
                                 )}
                             >
-                                <Icon style={{ width: 14, height: 14 }} />
+                                <Icon style={{ width: 14, height: 14, strokeWidth: 2.25 }} />
                                 <span className="hidden sm:inline">{shortLabel}</span>
                             </button>
                         ))}
-                    </div>
+                    </nav>
 
                     {/* Right: command cluster */}
                     <div className="flex items-center gap-2">
                         {/* Search */}
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" style={{ width: 14, height: 14 }} />
+                        <div className="relative group">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400 group-focus-within:text-blue-500 transition-colors pointer-events-none" style={{ width: 14, height: 14 }} />
                             <input
                                 type="text"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                placeholder="Search…"
+                                placeholder="Search pipeline…"
                                 aria-label="Search applications"
-                                className="h-8 w-44 rounded-lg border border-neutral-200 bg-white pl-7 pr-7 text-[13px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:ring-2 focus:ring-blue-400/40 focus:border-blue-400 transition-shadow"
+                                className="h-9 w-48 rounded-xl border border-neutral-200 bg-white/50 backdrop-blur-sm pl-9 pr-8 text-[13px] text-neutral-800 placeholder:text-neutral-400 outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 focus:bg-white transition-all shadow-sm"
                             />
                             <AnimatePresence>
                                 {search && (
                                     <motion.button
-                                        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                        initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.8 }}
                                         type="button"
                                         onClick={() => setSearch('')}
                                         aria-label="Clear search"
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-400 hover:bg-neutral-200 hover:text-neutral-600 transition-colors"
                                     >
-                                        <X style={{ width: 12, height: 12 }} />
+                                        <X style={{ width: 10, height: 10, strokeWidth: 3 }} />
                                     </motion.button>
                                 )}
                             </AnimatePresence>
@@ -730,42 +889,26 @@ export default function PipelinePage() {
                             value={statusFilter}
                             onChange={(e) => setStatusFilter(e.target.value as ApplicationStatus | '')}
                             aria-label="Filter by status"
-                            className="h-8 px-2.5 pr-7 rounded-lg border border-neutral-200 bg-white text-[13px] text-neutral-700 outline-none focus:ring-2 focus:ring-blue-400/40 transition-shadow appearance-none cursor-pointer"
-                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center' }}
+                            className="h-9 px-3 pr-8 rounded-xl border border-neutral-200 bg-white/50 backdrop-blur-sm text-[13px] font-medium text-neutral-700 outline-none focus:ring-2 focus:ring-blue-400/20 focus:border-blue-400 focus:bg-white transition-all appearance-none cursor-pointer shadow-sm"
+                            style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`, backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center' }}
                         >
-                            <option value="">All status</option>
+                            <option value="">All Statuses</option>
                             {(Object.keys(STATUS_CONFIG) as ApplicationStatus[]).map((s) => (
                                 <option key={s} value={s}>{STATUS_CONFIG[s].label}</option>
                             ))}
                         </select>
 
                         {/* Divider */}
-                        <div className="w-px h-6 bg-neutral-200" />
+                        <div className="w-px h-6 bg-neutral-200 mx-1" />
 
-                        {/* Import */}
-                        <button
-                            type="button" onClick={handleImport} title="Import CSV" aria-label="Import from CSV"
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-800 hover:border-neutral-300 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                        >
-                            <Upload style={{ width: 14, height: 14 }} />
-                        </button>
-
-                        {/* Export */}
-                        <button
-                            type="button" onClick={handleExport} title="Export to CSV" aria-label="Export to CSV"
-                            className="w-8 h-8 flex items-center justify-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:text-neutral-800 hover:border-neutral-300 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-400"
-                        >
-                            <Download style={{ width: 14, height: 14 }} />
-                        </button>
-
-                        {/* New Entry CTA */}
+                        {/* New Entry CTA (Premium Style) */}
                         <button
                             type="button"
                             onClick={openCreate}
                             aria-label="Add new application"
-                            className="inline-flex items-center gap-1.5 h-8 px-3.5 rounded-lg text-[13px] font-semibold bg-blue-600 text-white shadow-sm hover:bg-blue-700 active:bg-blue-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-1"
+                            className="inline-flex items-center gap-1.5 h-9 px-4 rounded-xl text-[13px] font-bold bg-neutral-900 text-white shadow-lg shadow-neutral-200 active:scale-[0.98] transition-all hover:bg-neutral-800 outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-neutral-900"
                         >
-                            <Plus style={{ width: 14, height: 14, strokeWidth: 2.5 }} /> New Entry
+                            <Plus style={{ width: 14, height: 14, strokeWidth: 3 }} /> New Entry
                         </button>
                     </div>
                 </div>
@@ -774,96 +917,111 @@ export default function PipelinePage() {
                 <AnimatePresence>
                     {isFiltered && (
                         <motion.div
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="flex items-center gap-2 flex-wrap overflow-hidden"
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            className="flex items-center gap-2 overflow-hidden"
                         >
-                            <span className="text-[12px] text-neutral-400">Filters:</span>
-                            {search && (
-                                <span className="inline-flex items-center gap-1 h-6 px-2.5 rounded-full bg-blue-50 text-blue-700 text-[11px] font-medium ring-1 ring-blue-200">
-                                    &ldquo;{search}&rdquo;
-                                    <button onClick={() => setSearch('')} className="ml-0.5 hover:text-blue-900" aria-label="Remove search filter">
-                                        <X style={{ width: 10, height: 10 }} />
-                                    </button>
-                                </span>
-                            )}
-                            {statusFilter && (
-                                <span className={cn('inline-flex items-center gap-1 h-6 px-2.5 rounded-full text-[11px] font-medium ring-1', STATUS_CONFIG[statusFilter as ApplicationStatus].pill)}>
-                                    {STATUS_CONFIG[statusFilter as ApplicationStatus].label}
-                                    <button onClick={() => setStatusFilter('')} className="ml-0.5" aria-label="Remove status filter">
-                                        <X style={{ width: 10, height: 10 }} />
-                                    </button>
-                                </span>
-                            )}
-                            <button onClick={clearFilters} className="text-[11px] text-neutral-400 hover:text-neutral-600 underline ml-1">Clear all</button>
-                            <span className="text-[11px] text-neutral-400 ml-auto">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</span>
+                            <span className="text-[12px] text-neutral-400 font-medium">Filtered by:</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                                {search && (
+                                    <span className="inline-flex items-center gap-1.5 h-7 px-3 rounded-xl bg-blue-50 text-blue-700 text-[11px] font-bold ring-1 ring-blue-200/50 shadow-sm">
+                                        &ldquo;{search}&rdquo;
+                                        <button onClick={() => setSearch('')} className="ml-0.5 hover:text-blue-900 p-0.5" aria-label="Remove search filter">
+                                            <X style={{ width: 10, height: 10, strokeWidth: 3 }} />
+                                        </button>
+                                    </span>
+                                )}
+                                {statusFilter && (
+                                    <span className={cn('inline-flex items-center gap-1.5 h-7 px-3 rounded-xl text-[11px] font-bold ring-1 shadow-sm', STATUS_CONFIG[statusFilter as ApplicationStatus].pill)}>
+                                        {STATUS_CONFIG[statusFilter as ApplicationStatus].label}
+                                        <button onClick={() => setStatusFilter('')} className="ml-0.5 p-0.5" aria-label="Remove status filter">
+                                            <X style={{ width: 10, height: 10, strokeWidth: 3 }} />
+                                        </button>
+                                    </span>
+                                )}
+                                <button onClick={clearFilters} className="text-xs text-neutral-400 hover:text-neutral-900 font-semibold transition-colors px-2">Reset</button>
+                            </div>
                         </motion.div>
                     )}
                 </AnimatePresence>
-            </div>
+            </header>
 
-            {/* ── Active View Container ───────────────────────────── */}
-            {isLoading ? SkeletonLoader : (
-                <AnimatePresence mode="wait" initial={false}>
-                    {view === 'list' && (
-                        <motion.div
-                            key="list"
-                            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.14 }}
-                        >
-                            <ListView
-                                apps={filtered}
-                                isFiltered={isFiltered}
-                                onClear={clearFilters}
-                                onDelete={handleDelete}
-                                onEdit={openEdit}
-                                onView={openView}
-                                onCreate={openCreate}
-                                search={search}
-                                debouncedSearch={debouncedSearch}
-                            />
+            {/* ── Main Viewport (Scrollable container) ────────────────────────── */}
+            <main className="flex-1 min-h-0 relative">
+                <AnimatePresence mode="wait">
+                    {isLoading ? (
+                        <motion.div key="skeleton" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0">
+                            {SkeletonLoader}
                         </motion.div>
-                    )}
-                    {view === 'grid' && (
+                    ) : (
                         <motion.div
-                            key="grid"
-                            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.14 }}
+                            key={view}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            className="h-full"
                         >
-                            <GridView
-                                apps={filtered}
-                                isFiltered={isFiltered}
-                                onClear={clearFilters}
-                                onDelete={handleDelete}
-                                onView={openView}
-                                onEdit={openEdit}
-                                onStatusChange={handleStatusChange}
-                                onCreate={openCreate}
-                            />
-                        </motion.div>
-                    )}
-                    {view === 'kanban' && (
-                        <motion.div
-                            key="kanban"
-                            initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                            transition={{ duration: 0.14 }}
-                        >
-                            <KanbanView
-                                apps={filtered}
-                                isFiltered={isFiltered}
-                                onStatusChange={handleStatusChange}
-                                onDelete={handleDelete}
-                                onView={openView}
-                                onEdit={openEdit}
-                                onCreate={openCreate}
-                            />
+                            {view === 'list' && (
+                                <ListView
+                                    apps={filtered}
+                                    isFiltered={isFiltered}
+                                    onClear={clearFilters}
+                                    onDelete={handleDelete}
+                                    onEdit={openEdit}
+                                    onView={openView}
+                                    onCreate={openCreate}
+                                    search={search}
+                                    debouncedSearch={debouncedSearch}
+                                    selectedIds={selectedIds}
+                                    toggleSelection={toggleSelection}
+                                    toggleAll={toggleAll}
+                                    openMenuId={openMenuId}
+                                    setOpenMenuId={setOpenMenuId}
+                                    pageSize={settings.pageSize}
+                                    saveGlobalSetting={saveGlobalSetting}
+                                />
+                            )}
+                            {view === 'grid' && (
+                                <GridView
+                                    apps={filtered}
+                                    isFiltered={isFiltered}
+                                    onClear={clearFilters}
+                                    onDelete={handleDelete}
+                                    onView={openView}
+                                    onEdit={openEdit}
+                                    onStatusChange={handleStatusChange}
+                                    onCreate={openCreate}
+                                    selectedIds={selectedIds}
+                                    toggleSelection={toggleSelection}
+                                />
+                            )}
+                            {view === 'kanban' && (
+                                <KanbanView
+                                    apps={filtered}
+                                    isFiltered={isFiltered}
+                                    selectedIds={selectedIds}
+                                    toggleSelection={toggleSelection}
+                                    onStatusChange={handleStatusChange}
+                                    onDelete={handleDelete}
+                                    onView={openView}
+                                    onEdit={openEdit}
+                                    onCreate={openCreate}
+                                />
+                            )}
                         </motion.div>
                     )}
                 </AnimatePresence>
-            )}
 
-            {/* ── App Form Modal ───────────────────────────────────── */}
+                <BatchStatusBar
+                    selectedCount={selectedIds.size}
+                    onClear={clearSelection}
+                    onDelete={handleBatchDelete}
+                />
+            </main>
+
+            {/* ── Modals & Drawers ─────────────────────────────────────────── */}
             <AppFormModal
                 open={modal.open}
                 mode={modal.editId ? 'edit' : 'create'}
@@ -874,7 +1032,6 @@ export default function PipelinePage() {
                 onClose={closeModal}
             />
 
-            {/* ── App Detail Drawer ─────────────────────────────────── */}
             <AppDetailDrawer
                 app={viewTarget}
                 onClose={closeView}
@@ -883,5 +1040,6 @@ export default function PipelinePage() {
                 onStatusChange={handleStatusChange}
             />
         </div>
+
     );
 }

@@ -6,12 +6,14 @@ const PROTECTED_ROUTES = ['/dashboard', '/applications', '/contacts', '/settings
 // Routes only for unauthenticated users
 const AUTH_ROUTES = ['/login', '/register', '/forgot-password'];
 
-export function middleware(request: NextRequest) {
+/**
+ * Next.js 16 Request Interception Proxy
+ * This replaces the deprecated middleware convention.
+ */
+export function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // Check if session cookie exists (we store session in localStorage, so we
-    // use a cookie as a lightweight signal set at login time).
-    // This keeps SSR-safe: we don't read localStorage in middleware.
+    // Check if session cookie exists
     const sessionCookie = request.cookies.get('jt_session');
     const isAuthenticated = !!sessionCookie?.value;
 

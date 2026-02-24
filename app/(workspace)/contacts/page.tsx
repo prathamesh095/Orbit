@@ -27,6 +27,9 @@ import {
 import { motion } from 'framer-motion';
 import { ContactDetailDrawer } from '@/components/contacts/ContactDetailDrawer';
 
+const SMOOTH_SPRING = { type: 'spring', stiffness: 300, damping: 30 };
+const STIFF_SPRING = { type: 'spring', stiffness: 400, damping: 30 };
+
 const PAGE_SIZE = 12;
 
 export default function ContactsPage() {
@@ -123,10 +126,12 @@ export default function ContactsPage() {
                         {paginated.map((contact, i) => (
                             <motion.div
                                 key={contact.id}
+                                layout
                                 initial={{ opacity: 0, y: 12 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.04 }}
-                                className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 flex flex-col hover:shadow-md transition-shadow cursor-pointer"
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ ...SMOOTH_SPRING, delay: i * 0.03 }}
+                                className="bg-white rounded-xl border border-neutral-200 shadow-sm p-5 flex flex-col hover:shadow-md transition-shadow cursor-pointer group"
                                 onClick={() => setViewTarget(contact)}
                                 role="button"
                                 tabIndex={0}

@@ -56,6 +56,8 @@ function BoardSkeleton() {
 interface KanbanViewProps {
     apps: Application[];
     isFiltered: boolean;
+    selectedIds: Set<string>;
+    toggleSelection: (id: string) => void;
     onStatusChange: (id: string, newStatus: ApplicationStatus) => void;
     onDelete: (id: string) => void;
     onView: (id: string) => void;
@@ -64,7 +66,10 @@ interface KanbanViewProps {
     isLoading?: boolean;
 }
 
-export function KanbanView({ apps, isFiltered, onStatusChange, onDelete, onView, onEdit, onCreate, isLoading }: KanbanViewProps) {
+export function KanbanView({
+    apps, isFiltered, selectedIds, toggleSelection,
+    onStatusChange, onDelete, onView, onEdit, onCreate, isLoading
+}: KanbanViewProps) {
     const scrollRef = useRef<HTMLDivElement>(null);
     const [canScrollLeft, setCanScrollLeft] = useState(false);
     const [canScrollRight, setCanScrollRight] = useState(false);
@@ -188,6 +193,8 @@ export function KanbanView({ apps, isFiltered, onStatusChange, onDelete, onView,
                                     accentClass={col.accentClass}
                                     dotClass={col.dotClass}
                                     bgClass={col.bgClass}
+                                    selectedIds={selectedIds}
+                                    toggleSelection={toggleSelection}
                                     onDeleteCard={onDelete}
                                     onView={onView}
                                     onEdit={onEdit}

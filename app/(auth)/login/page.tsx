@@ -11,7 +11,9 @@ import { loginSchema, type LoginFormData } from '@/lib/validations';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 
-export default function LoginPage() {
+import { Suspense } from 'react';
+
+function LoginContent() {
     const router = useRouter();
     const searchParams = useSearchParams();
     const { login } = useAuth();
@@ -108,5 +110,18 @@ export default function LoginPage() {
                 </Link>
             </p>
         </>
+    );
+}
+
+export default function LoginPage() {
+    return (
+        <Suspense fallback={
+            <div className="flex flex-col items-center justify-center p-8">
+                <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-sm text-gray-500 font-medium animate-pulse">Loading login...</p>
+            </div>
+        }>
+            <LoginContent />
+        </Suspense>
     );
 }

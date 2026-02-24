@@ -21,6 +21,10 @@ import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
 import { motion } from 'framer-motion';
 
+
+const SMOOTH_SPRING = { type: 'spring', stiffness: 300, damping: 30 };
+const STIFF_SPRING = { type: 'spring', stiffness: 400, damping: 30 };
+
 export default function DashboardPage() {
     const { user, isLoading: authLoading } = useAuth();
     const { applications, refresh } = useApplications(user?.id ?? '');
@@ -70,37 +74,40 @@ export default function DashboardPage() {
             </div>
 
             {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <motion.div
+                initial="hidden"
+                animate="visible"
+                variants={{
+                    visible: { transition: { staggerChildren: 0.05 } }
+                }}
+                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
+            >
                 <KPICard
                     title="Total Applications"
                     value={kpis.total}
                     icon={<Briefcase className="w-5 h-5 text-blue-600" />}
                     iconBg="bg-blue-100"
-                    delay={0}
                 />
                 <KPICard
                     title="Interviews"
                     value={kpis.interviews}
                     icon={<MessageSquare className="w-5 h-5 text-amber-600" />}
                     iconBg="bg-amber-100"
-                    delay={0.05}
                 />
                 <KPICard
                     title="Offers"
                     value={kpis.offers}
                     icon={<Trophy className="w-5 h-5 text-emerald-600" />}
                     iconBg="bg-emerald-100"
-                    delay={0.1}
                 />
                 <KPICard
                     title="Response Rate"
                     value={`${kpis.responseRate}%`}
                     icon={<TrendingUp className="w-5 h-5 text-violet-600" />}
                     iconBg="bg-violet-100"
-                    delay={0.15}
                     trend={kpis.total === 0 ? 'Add applications to track' : undefined}
                 />
-            </div>
+            </motion.div>
 
             {/* Charts */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -147,10 +154,12 @@ export default function DashboardPage() {
                         {urgentApps.map((app, i) => (
                             <motion.li
                                 key={app.id}
-                                initial={{ opacity: 0, x: -8 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                transition={{ delay: i * 0.05 }}
-                                className="flex items-center gap-4 px-6 py-3 border-b border-gray-50 last:border-b-0 hover:bg-gray-50 transition-colors"
+                                layout
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.98 }}
+                                transition={{ ...SMOOTH_SPRING, delay: i * 0.03 }}
+                                className="flex items-center gap-4 px-6 py-3 border-b border-gray-50 last:border-b-0 hover:bg-neutral-50/80 transition-colors group cursor-pointer"
                             >
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2 mb-0.5">

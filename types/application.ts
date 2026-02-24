@@ -12,6 +12,13 @@ export type EmailType =
     | 'referral'
     | 'application_confirmation';
 
+export type RecordIntent =
+    | 'application'
+    | 'outreach'
+    | 'recruiter'
+    | 'networking'
+    | 'followup';
+
 export type UrgencyLevel = 'critical' | 'overdue' | 'due_today' | 'normal';
 
 // ─── Attachment (discriminated union) ─────────────────────────────────────────
@@ -67,6 +74,7 @@ export interface Application {
     userId: string;
 
     // Core fields
+    recordIntent: RecordIntent;
     company: string;
     roleTitle: string;
     source: string;
@@ -91,6 +99,8 @@ export interface Application {
     // Source-contextual fields (Phase 3)
     referralContact?: string;
     recruiterName?: string;
+    contactName?: string;
+    contactEmail?: string;
 
     // Linked data
     linkedContactIds: string[];

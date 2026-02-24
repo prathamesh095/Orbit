@@ -275,7 +275,7 @@ const AttachmentItem = memo(function AttachmentItem({
 
 // ─── Main FileUpload Component ────────────────────────────────────────────────
 
-export function FileUpload({
+export const FileUpload = memo(function FileUpload({
     attachments, onChange,
     maxFileSize = 5 * 1024 * 1024,
     accept = '.pdf,.doc,.docx,.txt,.png,.jpg,.jpeg',
@@ -457,4 +457,4 @@ export function FileUpload({
             )}
         </div>
     );
-}
+});

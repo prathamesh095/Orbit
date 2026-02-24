@@ -9,6 +9,9 @@ const nextConfig = {
     remotePatterns: [],
   },
 
+  // Enable Turbopack support while maintaining Webpack compatibility
+  turbopack: {},
+
   // ─── Webpack Cache Hardening ────────────────────────────────────────────────
   // Root cause of ENOENT *.pack.gz errors on Windows:
   //   Next.js/webpack writes `.next/cache/webpack/*.pack.gz` files using

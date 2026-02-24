@@ -79,10 +79,10 @@ export function Modal({
                             aria-modal="true"
                             aria-labelledby={title ? 'modal-title' : undefined}
                             aria-describedby={description ? 'modal-description' : undefined}
-                            initial={{ opacity: 0, scale: 0.96, y: 10 }}
+                            initial={{ opacity: 0, scale: 0.98, y: 12 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.96, y: 10 }}
-                            transition={{ duration: 0.2 }}
+                            exit={{ opacity: 0, scale: 0.98, y: 12 }}
+                            transition={{ type: 'spring', stiffness: 450, damping: 35, mass: 0.8 }}
                             className={cn(
                                 'bg-white rounded-2xl shadow-2xl w-full relative max-h-[90vh] overflow-y-auto',
                                 sizeClasses[size],

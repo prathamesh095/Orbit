@@ -8,7 +8,7 @@ import React, {
     useCallback,
     type ReactNode,
 } from 'react';
-import type { AppSettings } from '@/types';
+import type { AppSettings, UserSettings } from '@/types';
 import * as storageService from '@/services/storage/storageService';
 import { useAuth } from './authContext';
 
@@ -17,7 +17,7 @@ const DEFAULT_APP_SETTINGS: Omit<AppSettings, 'userId' | 'updatedAt'> = {
     density: 'normal',
     themeAccent: 'blue',
     statusColors: {
-        draft: '#6b7280',
+        draft: '#94a3b8',
         applied: '#3b82f6',
         interviewing: '#f59e0b',
         offer: '#10b981',
@@ -27,7 +27,7 @@ const DEFAULT_APP_SETTINGS: Omit<AppSettings, 'userId' | 'updatedAt'> = {
     notifyOverdue: true,
     notifyInterviewing: true,
     defaultView: 'list',
-    pageSize: 20,
+    pageSize: 10,
     defaultFollowUpDays: 3,
 };
 
@@ -40,22 +40,15 @@ interface SettingsContextValue {
 const SettingsContext = createContext<SettingsContextValue | null>(null);
 
 function getSettings(userId: string): AppSettings {
-    const key = `jt_v1_${userId}_settings`;
-    try {
-        const raw = typeof window !== 'undefined' ? window.localStorage.getItem(key) : null;
-        if (!raw) return { ...DEFAULT_APP_SETTINGS, userId, updatedAt: new Date().toISOString() };
-        const parsed = JSON.parse(raw) as Partial<AppSettings>;
-        return { ...DEFAULT_APP_SETTINGS, ...parsed, userId, updatedAt: parsed.updatedAt ?? new Date().toISOString() };
-    } catch {
-        return { ...DEFAULT_APP_SETTINGS, userId, updatedAt: new Date().toISOString() };
-    }
+    const stored = storageService.getUserSettings(userId);
+    // getUserSettings already merges DEFAULT_SETTINGS and handles userId/updatedAt
+    // However, AppSettings has some fields that UserSettings (legacy) might not have.
+    // We cast it and ensure it matches the full AppSettings interface.
+    return stored as unknown as AppSettings;
 }
 
 function saveSettings(userId: string, settings: AppSettings): void {
-    if (typeof window === 'undefined') return;
-    try {
-        window.localStorage.setItem(`jt_v1_${userId}_settings`, JSON.stringify(settings));
-    } catch { /* quota exceeded */ }
+    storageService.saveUserSettings(userId, settings);
 }
 
 const GUEST_SETTINGS: AppSettings = {

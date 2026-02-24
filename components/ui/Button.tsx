@@ -2,7 +2,10 @@
 
 import React, { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
+
+const SMOOTH_SPRING = { type: 'spring', stiffness: 400, damping: 30 };
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -17,15 +20,15 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
     primary:
-        'bg-blue-600 text-white hover:bg-blue-700 active:scale-[0.98] shadow-sm hover:shadow-md',
+        'bg-blue-600 text-white shadow-sm shadow-blue-200/50',
     secondary:
-        'bg-neutral-100 text-neutral-800 hover:bg-neutral-200 active:scale-[0.98]',
+        'bg-neutral-100 text-neutral-800',
     ghost:
-        'bg-transparent text-neutral-600 hover:bg-neutral-100 active:scale-[0.98]',
+        'bg-transparent text-neutral-600',
     danger:
-        'bg-red-600 text-white hover:bg-red-700 active:scale-[0.98] shadow-sm',
+        'bg-red-600 text-white shadow-sm shadow-red-200/50',
     outline:
-        'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 hover:border-neutral-300 active:scale-[0.98] shadow-sm',
+        'border border-neutral-200 bg-white text-neutral-700 shadow-sm shadow-neutral-100/50',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
@@ -50,29 +53,32 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         ref
     ) => {
         return (
-            <button
-                ref={ref}
+            <motion.button
+                ref={ref as any}
                 disabled={disabled || isLoading}
+                whileHover={{ scale: 1.015, y: -1 }}
+                whileTap={{ scale: 0.985 }}
+                transition={SMOOTH_SPRING}
                 className={cn(
-                    'inline-flex items-center justify-center font-semibold rounded-xl transition-all duration-150',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
-                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
+                    'inline-flex items-center justify-center font-bold rounded-xl transition-colors duration-200',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-1',
+                    'disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none',
                     variantClasses[variant],
                     sizeClasses[size],
                     className
                 )}
-                {...props}
+                {...props as any}
             >
                 {isLoading ? (
                     <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
                 ) : (
-                    leftIcon && <span className="shrink-0">{leftIcon}</span>
+                    leftIcon && <span className="shrink-0 transition-transform group-hover:scale-110">{leftIcon}</span>
                 )}
-                {children}
+                <span className="relative z-10">{children}</span>
                 {!isLoading && rightIcon && (
-                    <span className="shrink-0">{rightIcon}</span>
+                    <span className="shrink-0 transition-transform group-hover:scale-110">{rightIcon}</span>
                 )}
-            </button>
+            </motion.button>
         );
     }
 );
