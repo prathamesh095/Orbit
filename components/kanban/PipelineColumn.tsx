@@ -143,23 +143,11 @@ function PipelineColumnInner({
 // ─── Memo ───────────────────────────────────────────────────────────────────────
 
 export const PipelineColumn = memo(PipelineColumnInner, (prev, next) => {
-    if (prev.applications.length !== next.applications.length) return false;
-    if (prev.id !== next.id || prev.totalApplications !== next.totalApplications) return false;
-    if (prev.selectedIds.size !== next.selectedIds.size) return false;
-
-    for (let i = 0; i < prev.applications.length; i++) {
-        const p = prev.applications[i];
-        const n = next.applications[i];
-        if (
-            p.id !== n.id ||
-            p.status !== n.status ||
-            p.nextFollowUp !== n.nextFollowUp ||
-            p.updatedAt !== n.updatedAt ||
-            (p.attachments?.length ?? 0) !== (n.attachments?.length ?? 0) ||
-            prev.selectedIds.has(p.id) !== next.selectedIds.has(n.id)
-        ) return false;
-    }
-    return true;
+    return (
+        prev.applications === next.applications &&
+        prev.selectedIds === next.selectedIds &&
+        prev.totalApplications === next.totalApplications
+    );
 });
 
 PipelineColumn.displayName = 'PipelineColumn';

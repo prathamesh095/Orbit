@@ -2,13 +2,15 @@
 
 import { useMemo } from 'react';
 import { useAuth } from '@/lib/authContext';
-import { useApplications } from '@/hooks/useApplications';
+import { useDashboardAnalytics } from '@/features/dashboard/hooks/useDashboardAnalytics';
+import { DashboardErrorBoundary } from '@/features/dashboard/components/DashboardErrorBoundary';
 import { KPICard } from '@/components/dashboard/KPICard';
 import { TrendChart, StatusPieChart } from '@/components/dashboard/Charts';
 import { SkeletonKPICard } from '@/components/ui/SkeletonLoader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/Badge';
 import { classifyUrgency, formatDate, URGENCY_COLORS } from '@/lib/utils';
+import type { Application, UrgencyLevel } from '@/types';
 import {
     Briefcase,
     MessageSquare,
@@ -16,47 +18,37 @@ import {
     TrendingUp,
     AlertTriangle,
     Clock,
+    Activity,
 } from 'lucide-react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/Button';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+import { FocusZone } from '@/features/dashboard/components/FocusZone';
+import { ActivityFeed } from '@/features/dashboard/components/ActivityFeed';
 
 
-const SMOOTH_SPRING = { type: 'spring', stiffness: 300, damping: 30 };
-const STIFF_SPRING = { type: 'spring', stiffness: 400, damping: 30 };
+const APPLE_SPRING = { type: 'spring', stiffness: 500, damping: 35 };
 
 export default function DashboardPage() {
     const { user, isLoading: authLoading } = useAuth();
-    const { applications, refresh } = useApplications(user?.id ?? '');
-
-    const kpis = useMemo(() => {
-        const total = applications.length;
-        const interviews = applications.filter((a) => a.status === 'interviewing').length;
-        const offers = applications.filter((a) => a.status === 'offer').length;
-        const replied = applications.filter(
-            (a) => a.replyReceived || a.status !== 'applied'
-        ).length;
-        const responseRate =
-            total > 0 ? Math.round((replied / total) * 100) : 0;
-
-        return { total, interviews, offers, responseRate };
-    }, [applications]);
+    const router = useRouter();
+    const { applications, metrics, isLoading } = useDashboardAnalytics(user?.id ?? '');
 
     const urgentApps = useMemo(() => {
         return applications
-            .map((a) => ({ ...a, urgency: classifyUrgency(a) }))
-            .filter((a) => a.urgency !== 'normal')
-            .sort((a, b) => {
-                const order = { critical: 0, overdue: 1, due_today: 2, normal: 3 };
-                return order[a.urgency] - order[b.urgency];
+            .filter((a: Application) => classifyUrgency(a) !== 'normal')
+            .sort((a: Application, b: Application) => {
+                const order: Record<UrgencyLevel, number> = { critical: 0, overdue: 1, due_today: 2, normal: 3 };
+                return order[classifyUrgency(a)] - order[classifyUrgency(b)];
             })
             .slice(0, 5);
     }, [applications]);
 
-    if (authLoading) {
+    if (authLoading || isLoading) {
         return (
-            <div className="space-y-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="space-y-8 animate-fade-in">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
                     {[0, 1, 2, 3].map((i) => <SkeletonKPICard key={i} />)}
                 </div>
             </div>
@@ -64,132 +56,87 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto">
-            {/* Welcome */}
-            <div>
-                <h2 className="text-xl font-bold text-gray-900">
-                    {user ? `Welcome back, ${user.name.split(' ')[0]} 👋` : 'Dashboard'}
-                </h2>
-                <p className="text-sm text-gray-500 mt-1">Here&apos;s your job search overview.</p>
-            </div>
-
-            {/* KPI Cards */}
-            <motion.div
-                initial="hidden"
-                animate="visible"
-                variants={{
-                    visible: { transition: { staggerChildren: 0.05 } }
-                }}
-                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4"
-            >
-                <KPICard
-                    title="Total Applications"
-                    value={kpis.total}
-                    icon={<Briefcase className="w-5 h-5 text-blue-600" />}
-                    iconBg="bg-blue-100"
-                />
-                <KPICard
-                    title="Interviews"
-                    value={kpis.interviews}
-                    icon={<MessageSquare className="w-5 h-5 text-amber-600" />}
-                    iconBg="bg-amber-100"
-                />
-                <KPICard
-                    title="Offers"
-                    value={kpis.offers}
-                    icon={<Trophy className="w-5 h-5 text-emerald-600" />}
-                    iconBg="bg-emerald-100"
-                />
-                <KPICard
-                    title="Response Rate"
-                    value={`${kpis.responseRate}%`}
-                    icon={<TrendingUp className="w-5 h-5 text-violet-600" />}
-                    iconBg="bg-violet-100"
-                    trend={kpis.total === 0 ? 'Add applications to track' : undefined}
-                />
-            </motion.div>
-
-            {/* Charts */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2">
-                    <TrendChart applications={applications} />
-                </div>
-                <StatusPieChart applications={applications} />
-            </div>
-
-            {/* Urgent Actions */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <AlertTriangle className="w-4 h-4 text-amber-500" />
-                        <h3 className="font-semibold text-gray-900 text-sm">Needs Attention</h3>
+        <DashboardErrorBoundary>
+            <div className="space-y-10 max-w-7xl mx-auto pb-16 animate-fade-in">
+                {/* Welcome Header */}
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 px-1">
+                    <div>
+                        <h2 className="text-[28px] font-semibold text-[#1D1D1F] tracking-tight leading-tight">
+                            {user ? `Good ${new Date().getHours() < 12 ? 'morning' : 'afternoon'}, ${user.name.split(' ')[0]}` : 'Dashboard'}
+                        </h2>
+                        <p className="text-[17px] text-[#86868B] mt-1.5 font-medium">Strategic overview of your career pipeline.</p>
                     </div>
-                    <Link href="/applications" className="text-xs text-blue-600 hover:text-blue-700 font-medium">
-                        View all
-                    </Link>
+                    <div className="flex items-center gap-3">
+                        <Link href="/applications">
+                            <Button variant="outline" className="px-5">View Pipeline</Button>
+                        </Link>
+                        <Button onClick={() => router.push('/applications?new=true')} className="px-5">
+                            New Application
+                        </Button>
+                    </div>
                 </div>
 
-                {urgentApps.length === 0 ? (
-                    <EmptyState
-                        icon={<Clock />}
-                        title="You're all caught up!"
-                        description={
-                            applications.length === 0
-                                ? 'Start by adding your first job application.'
-                                : 'No follow-ups needed right now.'
-                        }
-                        action={
-                            applications.length === 0 ? (
-                                <Link href="/applications/new">
-                                    <Button leftIcon={<Briefcase className="w-4 h-4" />}>
-                                        Add Application
-                                    </Button>
-                                </Link>
-                            ) : undefined
-                        }
-                        className="py-8"
+                {/* KPI Cards */}
+                <motion.div
+                    initial="hidden"
+                    animate="visible"
+                    variants={{
+                        visible: { transition: { staggerChildren: 0.08 } }
+                    }}
+                    className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+                >
+                    <KPICard
+                        title="Pipeline Size"
+                        value={metrics.totalApplications}
+                        icon={<Briefcase className="w-5 h-5 text-[#007AFF]" />}
+                        iconBg="bg-[#007AFF]/5"
                     />
-                ) : (
-                    <ul>
-                        {urgentApps.map((app, i) => (
-                            <motion.li
-                                key={app.id}
-                                layout
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, scale: 0.98 }}
-                                transition={{ ...SMOOTH_SPRING, delay: i * 0.03 }}
-                                className="flex items-center gap-4 px-6 py-3 border-b border-gray-50 last:border-b-0 hover:bg-neutral-50/80 transition-colors group cursor-pointer"
-                            >
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-0.5">
-                                        <span className="font-medium text-sm text-gray-900 truncate">{app.company}</span>
-                                        <span className="text-gray-300 text-xs">·</span>
-                                        <span className="text-sm text-gray-500 truncate">{app.roleTitle}</span>
-                                    </div>
-                                    {app.nextFollowUp && (
-                                        <p className="text-xs text-gray-400">
-                                            Follow-up: {formatDate(app.nextFollowUp)}
-                                        </p>
-                                    )}
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                    <StatusBadge status={app.status} />
-                                    <span className={`text-xs font-medium capitalize ${URGENCY_COLORS[app.urgency]}`}>
-                                        {app.urgency === 'due_today' ? 'Due Today' : app.urgency}
-                                    </span>
-                                </div>
-                                <Link
-                                    href={`/applications/${app.id}`}
-                                    className="text-xs text-blue-600 hover:text-blue-700 font-medium shrink-0"
-                                >
-                                    View →
-                                </Link>
-                            </motion.li>
-                        ))}
-                    </ul>
-                )}
+                    <KPICard
+                        title="Active Interviews"
+                        value={metrics.statusDistribution.interviewing}
+                        icon={<MessageSquare className="w-5 h-5 text-[#FF9500]" />}
+                        iconBg="bg-[#FF9500]/5"
+                    />
+                    <KPICard
+                        title="Offers Secured"
+                        value={metrics.statusDistribution.offer}
+                        icon={<Trophy className="w-5 h-5 text-[#34C759]" />}
+                        iconBg="bg-[#34C759]/5"
+                    />
+                    <KPICard
+                        title="Conversion Rate"
+                        value={`${Math.round(metrics.conversionRates.applicationToInterview)}%`}
+                        icon={<TrendingUp className="w-5 h-5 text-[#5856D6]" />}
+                        iconBg="bg-[#5856D6]/5"
+                    />
+                </motion.div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Main Content Area */}
+                    <div className="lg:col-span-2 space-y-8">
+                        {/* Distribution Charts */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            <div className="bg-white rounded-[22px] border border-[#000000]/05 p-6 shadow-apple-md">
+                                <TrendChart applications={applications} />
+                            </div>
+                            <div className="bg-white rounded-[22px] border border-[#000000]/05 p-6 shadow-apple-md">
+                                <StatusPieChart applications={applications} />
+                            </div>
+                        </div>
+
+                        {/* Intelligence Focus Zone */}
+                        <FocusZone
+                            metrics={metrics}
+                            onAddApplication={() => router.push('/applications?new=true')}
+                        />
+                    </div>
+
+                    {/* Activity Feed Sidebar */}
+                    <div className="space-y-8">
+                        <ActivityFeed userId={user?.id ?? ''} />
+                    </div>
+                </div>
             </div>
-        </div>
+        </DashboardErrorBoundary>
     );
 }

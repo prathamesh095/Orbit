@@ -25,7 +25,7 @@ export function KanbanCard({ application: app, onClick }: KanbanCardProps) {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
             tabIndex={0}
             role="button"
-            aria-label={`${app.company} — ${app.roleTitle}. ${app.status}`}
+            aria-label={`${app.company} — ${'roleTitle' in app ? (app as any).roleTitle : 'Follow-up'}. ${app.status}`}
             className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 cursor-pointer hover:shadow-md hover:border-blue-200 transition-all duration-150 select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
             <div className="flex items-start gap-2 mb-2">
@@ -34,14 +34,14 @@ export function KanbanCard({ application: app, onClick }: KanbanCardProps) {
                 </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-900 text-sm truncate">{app.company}</p>
-                    <p className="text-xs text-gray-500 truncate">{app.roleTitle}</p>
+                    <p className="text-xs text-gray-500 truncate">{'roleTitle' in app ? (app as any).roleTitle : 'Follow-up'}</p>
                 </div>
             </div>
 
-            {app.location && (
+            {'location' in app && (app as any).location && (
                 <div className="flex items-center gap-1 text-xs text-gray-400 mb-2">
                     <MapPin className="w-3 h-3 shrink-0" />
-                    {app.location}
+                    {(app as any).location}
                 </div>
             )}
 

@@ -2,7 +2,14 @@
 
 import { memo, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { cn, formatRelativeDate, classifyUrgency } from '@/lib/utils';
+import {
+    avatarPalette,
+    getInitials,
+    formatDate,
+    cn,
+    formatRelativeDate,
+    classifyUrgency
+} from '@/lib/utils';
 import type { Application, ApplicationStatus, UrgencyLevel, Attachment } from '@/types';
 import {
     Building2, MapPin, CalendarClock, Clock,
@@ -11,7 +18,11 @@ import {
     Paperclip, ChevronDown, CheckCircle2,
 } from 'lucide-react';
 import { IntentBadge } from '@/components/ui/IntentBadge';
-import { StatusPill } from '@/components/ui/StatusPill';
+import {
+    Highlight,
+    NextStepCell,
+    RowActions as CardMenu
+} from './PipelineComponents';
 
 // ─── Shared config ─────────────────────────────────────────────────────────────
 
@@ -31,34 +42,6 @@ const STATUS_ACCENT: Record<ApplicationStatus, string> = {
     offer: 'bg-emerald-500',
     rejected: 'bg-red-400',
 };
-
-const URGENCY_PAD: Record<UrgencyLevel, string> = {
-    critical: 'text-amber-700 bg-amber-50 ring-1 ring-amber-200',
-    overdue: 'text-red-600 bg-red-50 ring-1 ring-red-200',
-    due_today: 'text-blue-600 bg-blue-50 ring-1 ring-blue-200',
-    normal: 'text-neutral-400',
-};
-
-const AVATAR_PALETTES = [
-    'bg-blue-100 text-blue-700', 'bg-violet-100 text-violet-700',
-    'bg-emerald-100 text-emerald-700', 'bg-amber-100 text-amber-700',
-    'bg-rose-100 text-rose-700', 'bg-cyan-100 text-cyan-700',
-];
-function avatarPalette(s: string) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
-    return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
-}
-function getInitials(s: string) {
-    return s.split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
-}
-function getTimelineText(app: Application): string {
-    if (app.status === 'interviewing') return `Interview · ${formatRelativeDate(app.actionDate)}`;
-    if (app.status === 'offer') return `Offer · ${formatRelativeDate(app.actionDate)}`;
-    if (app.status === 'rejected') return `Rejected · ${formatRelativeDate(app.actionDate)}`;
-    if (app.status === 'applied') return `Applied · ${formatRelativeDate(app.actionDate)}`;
-    return `Drafted · ${formatRelativeDate(app.actionDate)}`;
-}
 
 // ─── Inline Status Picker ──────────────────────────────────────────────────────
 
@@ -119,76 +102,6 @@ function QuickStatusPicker({ current, onSelect }: {
     );
 }
 
-// ─── Card actions menu ─────────────────────────────────────────────────────────
-
-interface CardMenuProps {
-    appId: string;
-    onDelete: (id: string) => void;
-    onView: (id: string) => void;
-    onEdit: (id: string) => void;
-}
-
-function CardMenu({ appId, onDelete, onView, onEdit }: CardMenuProps) {
-    const [open, setOpen] = useState(false);
-
-    const items = [
-        { label: 'View details', Icon: Eye, action: () => { onView(appId); setOpen(false); } },
-        { label: 'Edit Entry', Icon: Pencil, action: () => { onEdit(appId); setOpen(false); } },
-        { label: 'Delete Entry', Icon: Trash2, action: () => { onDelete(appId); setOpen(false); }, danger: true },
-    ];
-
-    return (
-        <div className="relative" onClick={(e) => e.stopPropagation()}>
-            <button
-                type="button"
-                aria-label="Card actions"
-                aria-haspopup="menu"
-                aria-expanded={open}
-                onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-                className={cn(
-                    'w-8 h-8 flex items-center justify-center rounded-xl transition-all duration-200',
-                    'text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700',
-                    'outline-none focus-visible:ring-2 focus-visible:ring-blue-400',
-                    open ? 'bg-neutral-900 text-white shadow-md' : 'opacity-0 group-hover:opacity-100'
-                )}
-            >
-                <MoreHorizontal style={{ width: 14, height: 14, strokeWidth: 2.5 }} />
-            </button>
-            <AnimatePresence>
-                {open && (
-                    <>
-                        <div className="fixed inset-0 z-20" onClick={(e) => { e.stopPropagation(); setOpen(false); }} />
-                        <motion.div
-                            role="menu"
-                            initial={{ opacity: 0, scale: 0.98, y: -4 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.98, y: -4 }}
-                            transition={{ duration: 0.1 }}
-                            className="absolute right-0 top-10 z-30 w-48 bg-white rounded-xl border border-neutral-100 shadow-xl shadow-neutral-200/50 py-1.5 overflow-hidden"
-                        >
-                            {items.map(({ label, Icon, action, danger }) => (
-                                <button
-                                    key={label}
-                                    role="menuitem"
-                                    type="button"
-                                    onClick={(e) => { e.stopPropagation(); action(); }}
-                                    className={cn(
-                                        'w-full flex items-center gap-2.5 px-3 py-2 text-[13px] text-left transition-colors font-medium',
-                                        'outline-none focus-visible:bg-neutral-50',
-                                        danger ? 'text-red-600 hover:bg-red-50' : 'text-neutral-700 hover:bg-neutral-50'
-                                    )}
-                                >
-                                    <Icon style={{ width: 14, height: 14, strokeWidth: 2 }} /> {label}
-                                </button>
-                            ))}
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
-        </div>
-    );
-}
-
 // ─── Grid Card ─────────────────────────────────────────────────────────────────
 
 interface GridCardProps {
@@ -200,155 +113,99 @@ interface GridCardProps {
     onView: (id: string) => void;
     onEdit: (id: string) => void;
     onStatusChange: (id: string, s: ApplicationStatus) => void;
+    isMenuOpen: boolean;
+    onToggleMenu: (id: string | null) => void;
 }
 
 const GridCard = memo(function GridCard({
-    app, index, isSelected, onToggleSelection, onDelete, onView, onEdit, onStatusChange
+    app, index, isSelected, onToggleSelection, onDelete, onView, onEdit, onStatusChange,
+    isMenuOpen, onToggleMenu
 }: GridCardProps) {
     const palette = avatarPalette(app.company);
     const initials = getInitials(app.company);
-    const timeline = getTimelineText(app);
-    const urgency = classifyUrgency(app);
     const attachmentCount = app.attachments?.length ?? 0;
 
-    const handleClick = useCallback(() => onView(app.id), [onView, app.id]);
+    // Union-safe property access
+    const roleTitle = 'roleTitle' in app ? app.roleTitle : '';
+    const location = 'location' in app ? app.location : '';
+    const source = 'source' in app ? app.source : '';
 
     return (
         <motion.div
+            layout
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, delay: Math.min(index * 0.04, 0.4) }}
-            whileHover={{ y: -4, scale: 1.01, boxShadow: '0 20px 40px -12px rgba(0,0,0,0.12)' }}
-            onClick={handleClick}
-            onKeyDown={(e) => { if (e.key === 'Enter') handleClick(); }}
-            tabIndex={0}
-            role="button"
             className={cn(
                 'group relative bg-white rounded-3xl border transition-all duration-300',
                 'cursor-pointer flex flex-col overflow-hidden min-h-[200px]',
-                isSelected
-                    ? 'border-blue-500 ring-1 ring-blue-500 shadow-lg shadow-blue-500/10'
-                    : 'border-neutral-100 shadow-sm hover:border-neutral-200',
-                'outline-none focus-visible:ring-2 focus-visible:ring-blue-400'
+                isSelected ? 'border-blue-500 ring-2 ring-blue-500/10' : 'border-neutral-100 shadow-sm hover:border-neutral-200',
             )}
+            onClick={() => onView(app.id)}
         >
-            {/* Selection Overlay */}
-            <div
-                className={cn(
-                    'absolute left-4 top-4 z-10 transition-opacity duration-200',
-                    isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
-                )}
-                onClick={(e) => e.stopPropagation()}
-            >
-                <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onToggleSelection(app.id)}
-                    className="w-5 h-5 rounded-lg border-neutral-300 text-neutral-900 focus:ring-neutral-900 cursor-pointer shadow-sm transition-all"
-                />
-            </div>
-
-            {/* Status accent bar (top edge) */}
             <div className={cn('h-1 w-full shrink-0 opacity-80', STATUS_ACCENT[app.status])} />
 
-            {/* Card body */}
             <div className="p-5 flex flex-col flex-1">
-                {/* Top row: avatar + company + actions */}
                 <div className="flex items-start justify-between gap-3 mb-4">
                     <div className="flex items-center gap-3.5 min-w-0">
-                        <div
-                            className={cn('w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 font-bold select-none shadow-sm transition-transform group-hover:scale-105', palette)}
-                            style={{ fontSize: 13 }}
-                        >
+                        <div className={cn('w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 font-bold', palette)}>
                             {initials || <Building2 style={{ width: 16, height: 16 }} />}
                         </div>
                         <div className="min-w-0">
-                            <p className="font-bold text-neutral-900 truncate leading-tight mb-1" style={{ fontSize: 15 }} title={app.roleTitle}>
-                                {app.roleTitle}
+                            <p className="font-bold text-neutral-900 truncate leading-tight mb-1" style={{ fontSize: 15 }}>
+                                {roleTitle || app.company}
                             </p>
-                            <p className="text-neutral-500 font-medium truncate leading-tight" style={{ fontSize: 12.5 }} title={app.company}>
+                            <p className="text-neutral-500 font-medium truncate leading-tight text-xs">
                                 {app.company}
                             </p>
                         </div>
                     </div>
-                    <CardMenu appId={app.id} onDelete={onDelete} onView={onView} onEdit={onEdit} />
+                    <CardMenu
+                        appId={app.id}
+                        isOpen={isMenuOpen}
+                        onToggle={(open) => onToggleMenu(open ? app.id : null)}
+                        onDelete={onDelete}
+                        onView={onView}
+                        onEdit={onEdit}
+                    />
                 </div>
 
-                {/* Badges Row */}
                 <div className="flex items-center gap-2 flex-wrap mb-4">
                     <IntentBadge intent={app.recordIntent || 'application'} />
-                    {app.source && (
-                        <span className="inline-flex items-center h-5 px-2 rounded-lg text-[10px] font-bold uppercase tracking-wide bg-neutral-100 text-neutral-500 ring-1 ring-inset ring-neutral-200 shadow-sm">
-                            {app.source}
+                    {source && (
+                        <span className="inline-flex items-center h-5 px-2 rounded-lg text-[10px] font-bold uppercase bg-neutral-100 text-neutral-500">
+                            {source}
                         </span>
                     )}
                 </div>
 
-                {/* Location */}
-                {app.location && (
-                    <div className="flex items-center gap-1.5 text-neutral-400 mb-4" style={{ fontSize: 11.5 }}>
-                        <MapPin style={{ width: 12, height: 12, strokeWidth: 2 }} />
-                        <span className="truncate font-medium">{app.location}</span>
+                {location && (
+                    <div className="flex items-center gap-1.5 text-neutral-400 mb-4 text-xs font-medium">
+                        <MapPin style={{ width: 12, height: 12 }} />
+                        <span className="truncate">{location}</span>
                     </div>
                 )}
 
-                {/* Content Separator */}
                 <div className="mt-auto pt-4 border-t border-dashed border-neutral-100">
-                    {/* Status & Timeline */}
                     <div className="flex items-center justify-between gap-3 mb-3">
                         <QuickStatusPicker current={app.status} onSelect={(s) => onStatusChange(app.id, s)} />
-                        <span className="flex items-center gap-1.5 text-neutral-400 font-medium" style={{ fontSize: 11 }}>
-                            <CalendarClock style={{ width: 12, height: 12, strokeWidth: 2 }} />
-                            {timeline}
-                        </span>
                     </div>
 
-                    {/* Metadata: urgency + attachments */}
                     <div className="flex items-center justify-between gap-2 h-6">
-                        {urgency !== 'normal' && app.nextFollowUp && (
-                            <div className={cn(
-                                'inline-flex items-center gap-1.5 px-2 h-6 rounded-lg text-[10px] font-bold shadow-sm',
-                                URGENCY_PAD[urgency]
-                            )}>
-                                <Clock style={{ width: 10, height: 10, strokeWidth: 2.5 }} />
-                                {urgency === 'critical' ? 'Urgent Today' : urgency === 'overdue' ? 'Overdue' : 'Follow-up Today'}
-                            </div>
-                        )}
-                        {urgency === 'normal' && app.nextFollowUp && (
-                            <div className="flex items-center gap-1.5 text-neutral-400 font-medium" style={{ fontSize: 11 }}>
-                                <Clock style={{ width: 12, height: 12, strokeWidth: 2 }} />
-                                <span>{app.nextFollowUp}</span>
-                            </div>
-                        )}
-
+                        <NextStepCell app={app} />
                         <div className="ml-auto flex items-center gap-2.5">
                             {attachmentCount > 0 && (
-                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-400 bg-neutral-50 px-1.5 py-0.5 rounded-md ring-1 ring-neutral-100">
-                                    <Paperclip style={{ width: 11, height: 11, strokeWidth: 2.5 }} />
+                                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-neutral-400 bg-neutral-50 px-1.5 py-0.5 rounded-md">
+                                    <Paperclip style={{ width: 11, height: 11 }} />
                                     {attachmentCount}
                                 </span>
                             )}
-                            <p className="text-[10px] text-neutral-300 font-medium uppercase tracking-tighter">
-                                Updated {formatRelativeDate(app.updatedAt)}
-                            </p>
                         </div>
                     </div>
                 </div>
             </div>
         </motion.div>
     );
-}, (prev, next) =>
-    prev.app.id === next.app.id &&
-    prev.app.status === next.app.status &&
-    prev.app.company === next.app.company &&
-    prev.app.roleTitle === next.app.roleTitle &&
-    prev.app.nextFollowUp === next.app.nextFollowUp &&
-    prev.app.actionDate === next.app.actionDate &&
-    prev.app.updatedAt === next.app.updatedAt &&
-    prev.app.attachments?.length === next.app.attachments?.length &&
-    prev.isSelected === next.isSelected &&
-    prev.index === next.index
-);
+});
 
 // ─── GridView ──────────────────────────────────────────────────────────────────
 
@@ -374,6 +231,8 @@ export function GridView({
 }: GridViewProps) {
     const [page, setPage] = useState(1);
     const [pageSize, setPageSize] = useState<GridPageSize>(12);
+
+    const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
     const totalPages = Math.max(1, Math.ceil(apps.length / pageSize));
     const safePage = Math.min(page, totalPages);
@@ -426,6 +285,8 @@ export function GridView({
                                 onView={onView}
                                 onEdit={onEdit}
                                 onStatusChange={onStatusChange}
+                                isMenuOpen={openMenuId === app.id}
+                                onToggleMenu={setOpenMenuId}
                             />
                         ))}
                     </AnimatePresence>

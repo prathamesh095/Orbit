@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '@/lib/authContext';
-import { useApplications } from '@/hooks/useApplications';
+import { useCreateApplicationMutation } from '@/features/shared/api/applicationsApi';
 import { useToast } from '@/lib/toastContext';
 import { ApplicationForm } from '@/components/forms/ApplicationForm';
 import type { ApplicationFormValues } from '@/lib/validations';
@@ -15,16 +15,23 @@ const DRAFT_ID = 'new-application';
 export default function NewApplicationPage() {
     const router = useRouter();
     const { user } = useAuth();
-    const { createApplication } = useApplications(user?.id ?? '');
-    const { success, error } = useToast();
+    const createMutation = useCreateApplicationMutation();
+    const toast = useToast();
 
     const handleSubmit = async (data: ApplicationFormValues, attachments: Attachment[]) => {
         try {
-            const app = createApplication({ ...data, attachments });
-            success('Application saved!', `${data.company} — ${data.roleTitle}`);
-            router.push(`/applications/${app.id}`);
+            const userId = user?.id || 'demo-user';
+            createMutation.mutate({ userId, data: { ...data, attachments } }, {
+                onSuccess: (app: any) => {
+                    toast.success('Application saved!', `${(data as any).company} — ${(data as any).roleTitle || 'New Application'}`);
+                    router.push(`/applications`);
+                },
+                onError: (err: any) => {
+                    toast.error('Failed to save', err instanceof Error ? err.message : 'Please try again.');
+                }
+            });
         } catch (err) {
-            error('Failed to save', err instanceof Error ? err.message : 'Please try again.');
+            toast.error('Failed to save', err instanceof Error ? err.message : 'Please try again.');
         }
     };
 

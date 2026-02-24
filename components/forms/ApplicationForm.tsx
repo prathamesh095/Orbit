@@ -45,7 +45,7 @@ const MAXWAIT_MS = 10_000;
 
 interface IntentConfig {
     requiredFields: string[];
-    meaningfulFields: (keyof ApplicationFormValues)[];
+    meaningfulFields: string[];
     defaultSections: SectionState;
     defaultStatus: ApplicationFormValues['status'];
 }
@@ -86,7 +86,7 @@ const INTENT_CONFIG: Record<ApplicationFormValues['recordIntent'], IntentConfig>
 function hasMeaningfulData(values: ApplicationFormValues, intent: ApplicationFormValues['recordIntent']): boolean {
     const config = INTENT_CONFIG[intent];
     return config.meaningfulFields.some((field) => {
-        const val = values[field];
+        const val = (values as any)[field];
         if (typeof val === 'string') return !!val.trim();
         if (typeof val === 'boolean') return val;
         return !!val;
@@ -356,7 +356,7 @@ export function ApplicationForm({
             referralContact: '', recruiterName: '',
             contactName: '', contactEmail: '',
             ...defaultValues,
-        },
+        } as any,
     });
 
     const recordIntent = watch('recordIntent');
@@ -519,7 +519,7 @@ export function ApplicationForm({
     return (
         <>
             <NavigationGuard when={isDirty && formPhaseRef.current !== 'submitting'} />
-            <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-6" noValidate>
+            <form onSubmit={handleSubmit(handleFormSubmit as any)} className="space-y-6" noValidate>
 
                 {/* ── Phase 2: Intent Switcher ───────────────────────────── */}
                 <div className="bg-neutral-50 p-1 rounded-xl border border-neutral-200 flex flex-wrap gap-1">
@@ -569,16 +569,16 @@ export function ApplicationForm({
                         {(recordIntent === 'outreach' || recordIntent === 'networking') && (
                             <>
                                 <Input label="Contact Name" placeholder="Who are you talking to?"
-                                    {...register('contactName')} error={errors.contactName?.message} />
+                                    {...register('contactName')} error={(errors as any).contactName?.message} />
                                 <Input label="Contact Email (optional)" placeholder="email@example.com"
-                                    {...register('contactEmail')} error={errors.contactEmail?.message} />
+                                    {...register('contactEmail')} error={(errors as any).contactEmail?.message} />
                             </>
                         )}
 
                         {recordIntent === 'recruiter' && (
                             <>
                                 <Input label="Recruiter Name" placeholder="e.g. John Smith"
-                                    {...register('recruiterName')} error={errors.recruiterName?.message} />
+                                    {...register('recruiterName')} error={(errors as any).recruiterName?.message} />
                                 <Input label="Agency / Company" placeholder="e.g. Hired Inc"
                                     {...register('company')} error={errors.company?.message} />
                             </>
@@ -589,7 +589,7 @@ export function ApplicationForm({
                                 <Input label="Company" placeholder="e.g. Acme Corp" required
                                     {...register('company')} error={errors.company?.message} />
                                 <Input label="Role Title" placeholder="e.g. Senior Software Engineer" required
-                                    {...register('roleTitle')} error={errors.roleTitle?.message} />
+                                    {...register('roleTitle')} error={(errors as any).roleTitle?.message} />
                             </>
                         )}
 
@@ -607,7 +607,7 @@ export function ApplicationForm({
                         {/* Show Role Title as secondary for connection intents */}
                         {recordIntent !== 'application' && (
                             <Input label="Role Title (optional)" placeholder="e.g. Target Position"
-                                {...register('roleTitle')} error={errors.roleTitle?.message} />
+                                {...register('roleTitle' as any)} error={(errors as any).roleTitle?.message} />
                         )}
                     </div>
                     <div className="mt-4" ref={followUpRef}>
@@ -642,15 +642,15 @@ export function ApplicationForm({
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Select label="Application Source" options={SOURCE_OPTIONS}
-                            {...register('source')} error={errors.source?.message} />
+                            {...register('source' as any)} error={(errors as any).source?.message} />
                         <Input label="Job Posting URL" type="url" placeholder="https://..."
-                            {...register('jobPostingUrl')} error={errors.jobPostingUrl?.message} />
+                            {...register('jobPostingUrl' as any)} error={(errors as any).jobPostingUrl?.message} />
                         <Input label="Job ID / Req #" placeholder="e.g. JR-12345"
-                            {...register('jobId')} error={errors.jobId?.message} />
+                            {...register('jobId' as any)} error={(errors as any).jobId?.message} />
                         <Input label="Location" placeholder="e.g. Remote, New York, NY"
-                            {...register('location')} error={errors.location?.message} />
+                            {...register('location' as any)} error={(errors as any).location?.message} />
                         <Input label="Resume Version" placeholder="e.g. v3-senior-eng"
-                            {...register('resumeVersion')} error={errors.resumeVersion?.message} />
+                            {...register('resumeVersion' as any)} error={(errors as any).resumeVersion?.message} />
                     </div>
                     {/* Source-contextual: Referral contact */}
                     <AnimatePresence initial={false}>
@@ -665,8 +665,8 @@ export function ApplicationForm({
                                     <Input
                                         label="Referral Contact (optional)"
                                         placeholder="Who referred you?"
-                                        {...register('referralContact')}
-                                        error={errors.referralContact?.message}
+                                        {...register('referralContact' as any)}
+                                        error={(errors as any).referralContact?.message}
                                     />
                                     <p className="mt-1 text-xs text-neutral-400">Name of the person who referred you to this role.</p>
                                 </div>
@@ -686,8 +686,8 @@ export function ApplicationForm({
                                     <Input
                                         label="Recruiter Name (optional)"
                                         placeholder="Recruiter or agency name"
-                                        {...register('recruiterName')}
-                                        error={errors.recruiterName?.message}
+                                        {...register('recruiterName' as any)}
+                                        error={(errors as any).recruiterName?.message}
                                     />
                                     <p className="mt-1 text-xs text-neutral-400">Name of the recruiter or staffing agency.</p>
                                 </div>
@@ -709,24 +709,24 @@ export function ApplicationForm({
                 <CollapsibleSection title="Outreach Intelligence" open={sections.outreach} onToggle={() => toggleSection('outreach')}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Input label="Subject Line Used" placeholder="Email subject line"
-                            {...register('subjectLineUsed')} error={errors.subjectLineUsed?.message} />
+                            {...register('subjectLineUsed' as any)} error={(errors as any).subjectLineUsed?.message} />
                         <Select label="Email Type" options={EMAIL_TYPE_OPTIONS}
-                            {...register('emailType')} error={errors.emailType?.message} />
+                            {...register('emailType' as any)} error={(errors as any).emailType?.message} />
                     </div>
                     <div className="mt-4 space-y-4">
                         <Textarea
                             label="Value Pitch Summary" placeholder="Key value propositions pitched..."
                             autoResize maxChars={2000}
                             value={valuePitchSummary || ''}
-                            onChange={(e) => setValue('valuePitchSummary', e.target.value, { shouldDirty: true })}
-                            error={errors.valuePitchSummary?.message}
+                            onChange={(e) => setValue('valuePitchSummary' as any, e.target.value, { shouldDirty: true })}
+                            error={(errors as any).valuePitchSummary?.message}
                         />
                         <Textarea
                             label="Personalization Notes" placeholder="How you personalized the outreach..."
                             autoResize maxChars={2000}
                             value={personalizationNotes || ''}
-                            onChange={(e) => setValue('personalizationNotes', e.target.value, { shouldDirty: true })}
-                            error={errors.personalizationNotes?.message}
+                            onChange={(e) => setValue('personalizationNotes' as any, e.target.value, { shouldDirty: true })}
+                            error={(errors as any).personalizationNotes?.message}
                         />
                     </div>
                     <div className="mt-4 flex flex-wrap gap-6">

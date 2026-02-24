@@ -35,8 +35,12 @@ export function syncNotifications(userId: string): void {
     for (const app of apps) {
         if (app.status === 'rejected' || app.status === 'offer') continue;
 
+        const nextFollowUp = (app as any).nextFollowUp as string | undefined;
+        const followUpSent = (app as any).followUpSent as boolean | undefined;
+        const roleTitle = (app as any).roleTitle as string | undefined;
+
         // Overdue follow-up
-        if (app.nextFollowUp && app.nextFollowUp < todayStr && !app.followUpSent) {
+        if (nextFollowUp && nextFollowUp < todayStr && !followUpSent) {
             const key = `${app.id}:overdue`;
             if (!existingIds.has(key)) {
                 newNotifications.push({
@@ -44,7 +48,7 @@ export function syncNotifications(userId: string): void {
                     userId,
                     type: 'overdue',
                     title: 'Overdue Follow-up',
-                    message: `Follow-up for ${app.company} — ${app.roleTitle} is overdue since ${app.nextFollowUp}.`,
+                    message: `Follow-up for ${app.company} — ${roleTitle || 'Application'} is overdue since ${nextFollowUp}.`,
                     applicationId: app.id,
                     read: false,
                     dismissed: false,
@@ -55,7 +59,7 @@ export function syncNotifications(userId: string): void {
         }
 
         // Due today
-        if (app.nextFollowUp === todayStr && !app.followUpSent) {
+        if (nextFollowUp === todayStr && !followUpSent) {
             const key = `${app.id}:follow_up`;
             if (!existingIds.has(key)) {
                 newNotifications.push({
@@ -63,7 +67,7 @@ export function syncNotifications(userId: string): void {
                     userId,
                     type: 'follow_up',
                     title: 'Follow-up Due Today',
-                    message: `Time to follow up with ${app.company} for ${app.roleTitle}.`,
+                    message: `Time to follow up with ${app.company} for ${roleTitle || 'Application'}.`,
                     applicationId: app.id,
                     read: false,
                     dismissed: false,
@@ -82,7 +86,7 @@ export function syncNotifications(userId: string): void {
                     userId,
                     type: 'interview',
                     title: 'Active Interview',
-                    message: `You're in the interview stage with ${app.company} for ${app.roleTitle}.`,
+                    message: `You're in the interview stage with ${app.company} for ${roleTitle || 'Application'}.`,
                     applicationId: app.id,
                     read: false,
                     dismissed: false,

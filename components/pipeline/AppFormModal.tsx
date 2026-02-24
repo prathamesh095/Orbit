@@ -14,12 +14,10 @@ export type FormModalMode = 'create' | 'edit';
 
 export interface AppFormModalProps {
     open: boolean;
-    mode: FormModalMode;
     userId: string;
-    /** Only needed in edit mode */
-    application?: Application;
-    onCreate: (data: ApplicationFormValues, attachments: Attachment[]) => Promise<Application>;
-    onUpdate: (id: string, data: Partial<ApplicationFormValues>) => void;
+    /** Data for editing. If null, we are in 'create' mode. */
+    initialData: Application | null;
+    onSave: (data: ApplicationFormValues, attachments: Attachment[]) => Promise<void>;
     onClose: () => void;
     /** Toast/success handler called after save */
     onSaved?: () => void;
@@ -35,9 +33,11 @@ const DISCARD_MSG = 'You have unsaved changes. Discard?';
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
 export function AppFormModal({
-    open, mode, userId, application,
-    onCreate, onUpdate, onClose, onSaved,
+    open, userId, initialData: application,
+    onSave, onClose, onSaved,
 }: AppFormModalProps) {
+
+    const mode: FormModalMode = application ? 'edit' : 'create';
 
     // Track dirty state reported by ApplicationForm
     const [formIsDirty, setFormIsDirty] = useState(false);
@@ -121,34 +121,31 @@ export function AppFormModal({
 
     // ── Submit ────────────────────────────────────────────────────────────────
     const handleSubmit = useCallback(async (data: ApplicationFormValues, attachments: Attachment[]) => {
-        if (mode === 'edit' && application) {
-            onUpdate(application.id, data);
-        } else {
-            await onCreate(data, attachments);
-        }
+        await onSave(data, attachments);
         onSaved?.();
         onClose();
-    }, [mode, application, onCreate, onUpdate, onClose, onSaved]);
+    }, [onSave, onClose, onSaved]);
 
     // ── Default values ────────────────────────────────────────────────────────
     const defaultValues = application ? {
+        recordIntent: application.recordIntent,
         company: application.company,
-        roleTitle: application.roleTitle,
-        source: application.source ?? '',
-        jobPostingUrl: application.jobPostingUrl ?? '',
-        jobId: application.jobId ?? '',
-        location: application.location ?? '',
-        resumeVersion: application.resumeVersion ?? '',
+        roleTitle: 'roleTitle' in application ? (application as any).roleTitle : undefined,
+        source: 'source' in application ? (application as any).source ?? '' : undefined,
+        jobPostingUrl: 'jobPostingUrl' in application ? (application as any).jobPostingUrl ?? '' : undefined,
+        jobId: 'jobId' in application ? (application as any).jobId ?? '' : undefined,
+        location: 'location' in application ? (application as any).location ?? '' : undefined,
+        resumeVersion: 'resumeVersion' in application ? (application as any).resumeVersion ?? '' : undefined,
         actionDate: application.actionDate,
         status: application.status,
         nextFollowUp: application.nextFollowUp ?? '',
         strategicNotes: application.strategicNotes ?? '',
-        subjectLineUsed: application.subjectLineUsed ?? '',
-        valuePitchSummary: application.valuePitchSummary ?? '',
-        personalizationNotes: application.personalizationNotes ?? '',
-        replyReceived: application.replyReceived,
-        followUpSent: application.followUpSent,
-        emailType: application.emailType ?? '',
+        subjectLineUsed: 'subjectLineUsed' in application ? (application as any).subjectLineUsed ?? '' : undefined,
+        valuePitchSummary: 'valuePitchSummary' in application ? (application as any).valuePitchSummary ?? '' : undefined,
+        personalizationNotes: 'personalizationNotes' in application ? (application as any).personalizationNotes ?? '' : undefined,
+        replyReceived: 'replyReceived' in application ? (application as any).replyReceived : undefined,
+        followUpSent: 'followUpSent' in application ? (application as any).followUpSent : undefined,
+        emailType: 'emailType' in application ? (application as any).emailType ?? '' : undefined,
         linkedContactIds: application.linkedContactIds ?? [],
     } : undefined;
 
@@ -188,7 +185,7 @@ export function AppFormModal({
                                 </h2>
                                 {mode === 'edit' && application && (
                                     <p className="text-neutral-400 mt-0.5" style={{ fontSize: 12 }}>
-                                        {application.roleTitle} · {application.company}
+                                        {'roleTitle' in application ? (application as any).roleTitle : 'Follow-up'} · {application.company}
                                     </p>
                                 )}
                             </div>

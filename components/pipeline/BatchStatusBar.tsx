@@ -4,15 +4,16 @@ import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trash2, X, CheckSquare, MoreHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { ApplicationStatus } from '@/types';
 
 interface BatchStatusBarProps {
     selectedCount: number;
     onClear: () => void;
     onDelete: () => void;
-    onStatusUpdate?: (status: string) => void;
+    onStatusUpdate?: (status: ApplicationStatus) => void;
 }
 
-export function BatchStatusBar({ selectedCount, onClear, onDelete }: BatchStatusBarProps) {
+export function BatchStatusBar({ selectedCount, onClear, onDelete, onStatusUpdate }: BatchStatusBarProps) {
     return (
         <AnimatePresence>
             {selectedCount > 0 && (

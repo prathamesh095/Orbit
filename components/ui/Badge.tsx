@@ -13,34 +13,34 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-    default: 'bg-blue-100 text-blue-700 border-blue-200',
-    success: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    warning: 'bg-amber-100 text-amber-700 border-amber-200',
-    danger: 'bg-red-100 text-red-700 border-red-200',
-    info: 'bg-cyan-100 text-cyan-700 border-cyan-200',
-    neutral: 'bg-gray-100 text-gray-700 border-gray-200',
+    default: 'bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/10',
+    success: 'bg-[#34C759]/10 text-[#34C759] border-[#34C759]/10',
+    warning: 'bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/10',
+    danger: 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/10',
+    info: 'bg-[#5856D6]/10 text-[#5856D6] border-[#5856D6]/10',
+    neutral: 'bg-[#8E8E93]/10 text-[#8E8E93] border-[#8E8E93]/10',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
-    default: 'bg-blue-500',
-    success: 'bg-emerald-500',
-    warning: 'bg-amber-500',
-    danger: 'bg-red-500',
-    info: 'bg-cyan-500',
-    neutral: 'bg-gray-400',
+    default: 'bg-[#007AFF]',
+    success: 'bg-[#34C759]',
+    warning: 'bg-[#FF9500]',
+    danger: 'bg-[#FF3B30]',
+    info: 'bg-[#5856D6]',
+    neutral: 'bg-[#8E8E93]',
 };
 
 export function Badge({ variant = 'default', children, className, dot = false }: BadgeProps) {
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium border',
+                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[6px] text-[11px] font-semibold uppercase tracking-wider border',
                 variantStyles[variant],
                 className
             )}
         >
             {dot && (
-                <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', dotColors[variant])} />
+                <span className={cn('w-1 h-1 rounded-full shrink-0', dotColors[variant])} />
             )}
             {children}
         </span>

@@ -41,9 +41,13 @@ export function classifyUrgency(app: Application): UrgencyLevel {
 
     if (app.status === 'interviewing') return 'critical';
 
+    // Outreach/Networking specific logic
+    const isOutreach = app.recordIntent === 'outreach' || app.recordIntent === 'networking';
+    const followUpSent = isOutreach ? (app as any).followUpSent : false;
+
     if (app.nextFollowUp) {
-        if (app.nextFollowUp < todayStr && !app.followUpSent) return 'overdue';
-        if (app.nextFollowUp === todayStr && !app.followUpSent) return 'due_today';
+        if (app.nextFollowUp < todayStr && !followUpSent) return 'overdue';
+        if (app.nextFollowUp === todayStr && !followUpSent) return 'due_today';
     }
 
     return 'normal';
@@ -88,8 +92,29 @@ export const STATUS_COLORS: Record<string, string> = {
 };
 
 export const URGENCY_COLORS: Record<UrgencyLevel, string> = {
-    critical: 'text-amber-600',
-    overdue: 'text-red-600',
-    due_today: 'text-blue-600',
-    normal: 'text-gray-500',
+    critical: 'text-red-600',
+    overdue: 'text-rose-600',
+    due_today: 'text-amber-600',
+    normal: 'text-gray-400',
 };
+
+export const AVATAR_PALETTES = [
+    'bg-blue-50 text-blue-700 ring-1 ring-blue-100',
+    'bg-violet-50 text-violet-700 ring-1 ring-violet-100',
+    'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100',
+    'bg-amber-50 text-amber-700 ring-1 ring-amber-100',
+    'bg-rose-50 text-rose-700 ring-1 ring-rose-100',
+    'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-100',
+];
+
+export function avatarPalette(s: string) {
+    if (!s) return AVATAR_PALETTES[0];
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h);
+    return AVATAR_PALETTES[Math.abs(h) % AVATAR_PALETTES.length];
+}
+
+export function getInitials(s: string) {
+    if (!s) return '';
+    return s.split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase();
+}

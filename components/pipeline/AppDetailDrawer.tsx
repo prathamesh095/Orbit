@@ -249,24 +249,24 @@ function FollowUpCard({ app }: { app: Application }) {
 // ─── Source Intelligence ───────────────────────────────────────────────────────
 
 function SourcePanel({ app }: { app: Application }) {
-    if (app.source === 'Referral' && app.referralContact) {
+    if ('source' in app && app.source === 'Referral' && 'referralContact' in app && app.referralContact) {
         return (
             <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-violet-50 border border-violet-100">
                 <User className="w-4 h-4 text-violet-500 shrink-0" />
                 <div>
                     <p className="text-[10.5px] font-medium text-violet-500 uppercase tracking-wide">Referral pipeline</p>
-                    <p className="text-[12.5px] text-violet-900 font-medium">{app.referralContact}</p>
+                    <p className="text-[12.5px] text-violet-900 font-medium">{('referralContact' in app ? (app as any).referralContact as string : '')}</p>
                 </div>
             </div>
         );
     }
-    if (app.source === 'Recruiter' && app.recruiterName) {
+    if ('source' in app && app.source === 'Recruiter' && 'recruiterName' in app && app.recruiterName) {
         return (
             <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl bg-blue-50 border border-blue-100">
                 <Briefcase className="w-4 h-4 text-blue-500 shrink-0" />
                 <div>
                     <p className="text-[10.5px] font-medium text-blue-500 uppercase tracking-wide">Recruiter-managed</p>
-                    <p className="text-[12.5px] text-blue-900 font-medium">{app.recruiterName}</p>
+                    <p className="text-[12.5px] text-blue-900 font-medium">{('recruiterName' in app ? (app as any).recruiterName as string : '')}</p>
                 </div>
             </div>
         );
@@ -292,7 +292,7 @@ function DeleteConfirm({ app, onConfirm, onCancel }: { app: Application; onConfi
                     <Trash2 className="w-5 h-5 text-red-500" />
                 </div>
                 <h3 className="font-semibold text-neutral-900 text-[15px] mb-1.5">Delete this application?</h3>
-                <p className="text-[13px] text-neutral-500 mb-5">{app.company} — {app.roleTitle}. This cannot be undone.</p>
+                <p className="text-[13px] text-neutral-500 mb-5">{app.company} — {'roleTitle' in app ? app.roleTitle : 'Follow-up'}. This cannot be undone.</p>
                 <div className="flex gap-3">
                     <button type="button" onClick={onCancel}
                         className="flex-1 h-9 rounded-xl border border-neutral-200 text-[13px] font-medium text-neutral-600 hover:bg-neutral-50 transition-colors outline-none">
@@ -355,9 +355,9 @@ export function AppDetailDrawer({ app, onClose, onEdit, onDelete, onStatusChange
                         key="app-drawer-panel"
                         initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
                         transition={{ duration: 0.26, ease: [0.4, 0, 0.2, 1] }}
-                        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-white border-l border-neutral-100 shadow-2xl flex flex-col"
+                        className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-lg bg-white/90 backdrop-blur-xl border-l border-neutral-100/50 shadow-2xl flex flex-col"
                         role="dialog" aria-modal="true"
-                        aria-label={`${app.company} — ${app.roleTitle}`}
+                        aria-label={`${app.company} — ${'roleTitle' in app ? app.roleTitle : 'Details'}`}
                     >
                         {/* ── Header ──────────────────────────────────────────── */}
                         <div className="flex items-start gap-3 px-5 py-4 border-b border-neutral-100 shrink-0">
@@ -366,12 +366,14 @@ export function AppDetailDrawer({ app, onClose, onEdit, onDelete, onStatusChange
                                 {app.company.slice(0, 2).toUpperCase()}
                             </div>
                             <div className="min-w-0 flex-1">
-                                <h2 className="font-bold text-neutral-900 truncate" style={{ fontSize: 15 }}>{app.roleTitle}</h2>
-                                <p className="text-[12.5px] text-neutral-500 truncate">{app.company}{app.location ? ` · ${app.location}` : ''}</p>
+                                <h2 className="font-bold text-neutral-900 truncate" style={{ fontSize: 15 }}>
+                                    {'roleTitle' in app ? app.roleTitle : 'Follow-up'}
+                                </h2>
+                                <p className="text-[12.5px] text-neutral-500 truncate">{app.company}{'location' in app && app.location ? ` · ${app.location}` : ''}</p>
                                 <div className="flex items-center gap-2 mt-2 flex-wrap">
                                     <InlineStatusPicker current={app.status} onSelect={(s) => onStatusChange(app.id, s)} />
-                                    {app.source && (
-                                        <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[10.5px] bg-neutral-100 text-neutral-600 ring-1 ring-neutral-200">
+                                    {'source' in app && app.source && (
+                                        <span className="inline-flex items-center gap-1 h-6 px-2 rounded-full text-[10.5px] bg-neutral-100/50 text-neutral-600 ring-1 ring-neutral-200/50">
                                             {app.source}
                                         </span>
                                     )}
@@ -405,42 +407,42 @@ export function AppDetailDrawer({ app, onClose, onEdit, onDelete, onStatusChange
                             {/* Core details */}
                             <Section title="Details">
                                 <InfoRow icon={CalendarClock} label="Action Date" value={app.actionDate ? formatDate(app.actionDate) : undefined} />
-                                <InfoRow icon={MapPin} label="Location" value={app.location || undefined} />
-                                <InfoRow icon={Hash} label="Job ID" value={app.jobId || undefined} copy />
-                                <InfoRow icon={FileText} label="Resume Version" value={app.resumeVersion || undefined} />
-                                {app.jobPostingUrl && (
+                                <InfoRow icon={MapPin} label="Location" value={('location' in app ? app.location : undefined) || undefined} />
+                                <InfoRow icon={Hash} label="Job ID" value={('jobId' in app ? app.jobId : undefined) || undefined} copy />
+                                <InfoRow icon={FileText} label="Resume Version" value={('resumeVersion' in app ? app.resumeVersion : undefined) || undefined} />
+                                {'jobPostingUrl' in app && app.jobPostingUrl && (
                                     <InfoRow icon={Globe} label="Job Posting" value={app.jobPostingUrl} href={app.jobPostingUrl} copy />
                                 )}
                             </Section>
 
                             {/* Outreach */}
-                            {(app.subjectLineUsed || app.valuePitchSummary || app.personalizationNotes || app.emailType) && (
+                            {('subjectLineUsed' in app || 'valuePitchSummary' in app || 'personalizationNotes' in app || 'emailType' in app) && (
                                 <Section title="Outreach">
-                                    {app.emailType && (
+                                    {Boolean('emailType' in app && app.emailType) && (
                                         <InfoRow icon={Mail} label="Email Type"
-                                            value={app.emailType.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())} />
+                                            value={String((app as any).emailType).replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())} />
                                     )}
-                                    <InfoRow icon={Mail} label="Subject Line" value={app.subjectLineUsed || undefined} />
-                                    {app.valuePitchSummary && (
+                                    <InfoRow icon={Mail} label="Subject Line" value={'subjectLineUsed' in app ? (app as any).subjectLineUsed as string : undefined} />
+                                    {Boolean('valuePitchSummary' in app && app.valuePitchSummary) && (
                                         <div className="py-1.5">
                                             <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1">Value Pitch</p>
-                                            <p className="text-[13px] text-neutral-700 whitespace-pre-wrap leading-relaxed">{app.valuePitchSummary}</p>
+                                            <p className="text-[13px] text-neutral-700 whitespace-pre-wrap leading-relaxed">{(app as any).valuePitchSummary as string}</p>
                                         </div>
                                     )}
-                                    {app.personalizationNotes && (
+                                    {Boolean('personalizationNotes' in app && app.personalizationNotes) && (
                                         <div className="py-1.5">
                                             <p className="text-[11px] font-medium text-neutral-400 uppercase tracking-wide mb-1">Personalization</p>
-                                            <p className="text-[13px] text-neutral-700 whitespace-pre-wrap leading-relaxed">{app.personalizationNotes}</p>
+                                            <p className="text-[13px] text-neutral-700 whitespace-pre-wrap leading-relaxed">{(app as any).personalizationNotes as string}</p>
                                         </div>
                                     )}
                                     <div className="flex gap-4 mt-2">
                                         <div className="flex items-center gap-1.5 text-[12px]">
-                                            <span className={cn('w-2 h-2 rounded-full', app.replyReceived ? 'bg-emerald-500' : 'bg-neutral-200')} />
-                                            <span className={app.replyReceived ? 'text-emerald-700' : 'text-neutral-400'}>Reply received</span>
+                                            <span className={cn('w-2 h-2 rounded-full', ('replyReceived' in app && app.replyReceived) ? 'bg-emerald-500' : 'bg-neutral-200')} />
+                                            <span className={('replyReceived' in app && app.replyReceived) ? 'text-emerald-700' : 'text-neutral-400'}>Reply received</span>
                                         </div>
                                         <div className="flex items-center gap-1.5 text-[12px]">
-                                            <span className={cn('w-2 h-2 rounded-full', app.followUpSent ? 'bg-blue-500' : 'bg-neutral-200')} />
-                                            <span className={app.followUpSent ? 'text-blue-700' : 'text-neutral-400'}>Follow-up sent</span>
+                                            <span className={cn('w-2 h-2 rounded-full', ('followUpSent' in app && app.followUpSent) ? 'bg-blue-500' : 'bg-neutral-200')} />
+                                            <span className={('followUpSent' in app && app.followUpSent) ? 'text-blue-700' : 'text-neutral-400'}>Follow-up sent</span>
                                         </div>
                                     </div>
                                 </Section>

@@ -1,9 +1,9 @@
 'use client';
 
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, X, Check, CheckCheck, Clock, AlertTriangle, BarChart } from 'lucide-react';
+import { Bell, X, Check, CheckCheck, Clock, AlertTriangle, BarChart, MessageSquare } from 'lucide-react';
 import type { Notification, NotificationType } from '@/types';
-import { formatRelativeDate } from '@/lib/utils';
+import { formatRelativeDate, cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 
 interface NotificationPanelProps {
@@ -16,12 +16,12 @@ interface NotificationPanelProps {
 }
 
 const NOTIF_ICONS: Record<NotificationType, React.ReactNode> = {
-    follow_up: <Clock className="w-4 h-4 text-blue-500" />,
-    overdue: <AlertTriangle className="w-4 h-4 text-red-500" />,
-    reminder: <Bell className="w-4 h-4 text-amber-500" />,
-    system: <BarChart className="w-4 h-4 text-gray-500" />,
-    offer: <Check className="w-4 h-4 text-emerald-500" />,
-    interview: <BarChart className="w-4 h-4 text-amber-500" />,
+    follow_up: <Clock className="w-4 h-4 text-[#007AFF]" />,
+    overdue: <AlertTriangle className="w-4 h-4 text-[#FF3B30]" />,
+    reminder: <Bell className="w-4 h-4 text-[#FFCC00]" />,
+    system: <BarChart className="w-4 h-4 text-[#8E8E93]" />,
+    offer: <Check className="w-4 h-4 text-[#34C759]" />,
+    interview: <MessageSquare className="w-4 h-4 text-[#FF9500]" />,
 };
 
 export function NotificationPanel({
@@ -46,50 +46,51 @@ export function NotificationPanel({
                     />
                     {/* Panel */}
                     <motion.div
-                        initial={{ opacity: 0, y: -8, scale: 0.98 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                        transition={{ duration: 0.15 }}
-                        className="fixed top-[68px] right-4 z-40 w-80 max-w-[calc(100vw-2rem)] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden"
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                        className="fixed top-[72px] right-6 z-40 w-[360px] max-w-[calc(100vw-3rem)] glass-apple rounded-[24px] shadow-apple-lg overflow-hidden border border-[#000000]/05"
                         role="dialog"
                         aria-label="Notification center"
                     >
                         {/* Header */}
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                            <div className="flex items-center gap-2">
-                                <Bell className="w-4 h-4 text-gray-600" />
-                                <span className="font-semibold text-gray-900 text-sm">Notifications</span>
+                        <div className="px-5 py-4 flex items-center justify-between border-b border-[#000000]/05 bg-white/50">
+                            <div className="flex items-center gap-2.5">
+                                <h3 className="text-[17px] font-semibold text-[#1D1D1F] tracking-tight">Notifications</h3>
                                 {unread > 0 && (
-                                    <span className="w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                                    <span className="bg-[#007AFF] text-white text-[11px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                                         {unread}
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1">
+                            <div className="flex items-center gap-2">
                                 {unread > 0 && (
                                     <button
                                         onClick={onMarkAllRead}
-                                        className="text-xs text-blue-600 hover:text-blue-700 px-2 py-1 rounded-lg hover:bg-blue-50 transition-colors"
+                                        className="text-[13px] font-medium text-[#007AFF] hover:bg-[#007AFF]/10 px-2.5 py-1.5 rounded-lg transition-colors"
                                     >
-                                        Mark all read
+                                        Mark All
                                     </button>
                                 )}
                                 <button
                                     onClick={onClose}
-                                    aria-label="Close notifications"
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                                    className="p-1.5 rounded-full hover:bg-black/5 text-[#86868B] transition-colors"
                                 >
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
-// ─── Grouping Logic ─────────────────────────────────────────
+
                         {/* List */}
-                        <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                        <div className="max-h-[min(480px,70vh)] overflow-y-auto custom-scrollbar bg-white/30">
                             {notifications.length === 0 ? (
-                                <div className="py-10 text-center">
-                                    <CheckCheck className="w-8 h-8 text-neutral-300 mx-auto mb-2" />
-                                    <p className="text-sm text-neutral-500">You&apos;re all caught up!</p>
+                                <div className="py-16 text-center">
+                                    <div className="w-12 h-12 bg-[#F5F5F7] rounded-full flex items-center justify-center mx-auto mb-4">
+                                        <Bell className="w-6 h-6 text-[#D1D1D6]" />
+                                    </div>
+                                    <p className="text-[15px] font-semibold text-[#1D1D1F]">All caught up</p>
+                                    <p className="text-[13px] text-[#86868B] mt-1">No new notifications.</p>
                                 </div>
                             ) : (
                                 (() => {
@@ -110,44 +111,52 @@ export function NotificationPanel({
                                         if (items.length === 0) return null;
                                         return (
                                             <div key={label}>
-                                                <div className="bg-neutral-50/80 px-4 py-1.5 border-y border-neutral-100/50">
-                                                    <span className="text-[10px] font-bold text-neutral-400 uppercase tracking-widest">{label}</span>
+                                                <div className="px-5 py-2.5 bg-[#F5F5F7]/50 backdrop-blur-sm border-b border-[#000000]/03">
+                                                    <span className="text-[11px] font-bold text-[#86868B] uppercase tracking-[0.05em]">{label}</span>
                                                 </div>
-                                                {items.map((n) => (
-                                                    <div
-                                                        key={n.id}
-                                                        className={`flex items-start gap-3 px-4 py-3 border-b border-gray-50 hover:bg-gray-50 transition-colors ${!n.read ? 'bg-blue-50/40' : ''}`}
-                                                    >
-                                                        <div className="mt-0.5 shrink-0">
-                                                            {NOTIF_ICONS[n.type]}
-                                                        </div>
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className={`text-sm ${!n.read ? 'font-semibold text-gray-900' : 'text-gray-700'}`}>
-                                                                {n.title}
-                                                            </p>
-                                                            <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{n.message}</p>
-                                                            <p className="text-[10px] text-neutral-400 mt-1 uppercase font-medium">{formatRelativeDate(n.createdAt)}</p>
-                                                        </div>
-                                                        <div className="flex flex-col gap-1 shrink-0">
-                                                            {!n.read && (
-                                                                <button
-                                                                    onClick={() => onMarkRead(n.id)}
-                                                                    title="Mark as read"
-                                                                    className="w-6 h-6 flex items-center justify-center rounded-md text-neutral-400 hover:text-blue-500 hover:bg-white transition-all shadow-sm active:scale-95"
-                                                                >
-                                                                    <Check className="w-3.5 h-3.5" />
-                                                                </button>
+                                                <div className="divide-y divide-[#000000]/03">
+                                                    {items.map((n) => (
+                                                        <div
+                                                            key={n.id}
+                                                            className={cn(
+                                                                "group flex items-start gap-4 px-5 py-4 transition-all hover:bg-white/60 relative",
+                                                                !n.read && "after:absolute after:left-1 after:top-1/2 after:-translate-y-1/2 after:w-1.5 after:h-1.5 after:bg-[#007AFF] after:rounded-full"
                                                             )}
+                                                        >
+                                                            <div className="mt-0.5 shrink-0 w-8 h-8 rounded-[10px] bg-[#F5F5F7] flex items-center justify-center shadow-apple-sm">
+                                                                {NOTIF_ICONS[n.type]}
+                                                            </div>
+                                                            <div className="flex-1 min-w-0">
+                                                                <div className="flex justify-between items-start gap-2">
+                                                                    <p className={cn(
+                                                                        "text-[14px] leading-tight",
+                                                                        !n.read ? "font-semibold text-[#1D1D1F]" : "font-medium text-[#424245]"
+                                                                    )}>
+                                                                        {n.title}
+                                                                    </p>
+                                                                    <span className="text-[11px] font-medium text-[#A1A1A6] tabular-nums shrink-0 mt-0.5">
+                                                                        {formatRelativeDate(n.createdAt)}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-[13px] text-[#86868B] mt-1 leading-relaxed line-clamp-2">{n.message}</p>
+                                                                {!n.read && (
+                                                                    <button
+                                                                        onClick={() => onMarkRead(n.id)}
+                                                                        className="mt-2 text-[12px] font-semibold text-[#007AFF] opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        Mark as Read
+                                                                    </button>
+                                                                )}
+                                                            </div>
                                                             <button
                                                                 onClick={() => onDismiss(n.id)}
-                                                                title="Dismiss"
-                                                                className="w-6 h-6 flex items-center justify-center rounded-md text-neutral-400 hover:text-red-500 hover:bg-white transition-all shadow-sm active:scale-95"
+                                                                className="opacity-0 group-hover:opacity-100 p-1.5 rounded-full hover:bg-black/5 text-[#86868B] transition-all shrink-0 mt-0.5"
                                                             >
                                                                 <X className="w-3.5 h-3.5" />
                                                             </button>
                                                         </div>
-                                                    </div>
-                                                ))}
+                                                    ))}
+                                                </div>
                                             </div>
                                         );
                                     });

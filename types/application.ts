@@ -67,57 +67,73 @@ export interface ExecutionLog {
     metadata?: Record<string, string>;
 }
 
-// ─── Application ──────────────────────────────────────────────────────────────
+// ─── Application (Discriminated Union) ─────────────────────────────────────────
 
-export interface Application {
+export interface BaseApplication {
     id: string;
     userId: string;
-
-    // Core fields
-    recordIntent: RecordIntent;
     company: string;
+    actionDate: string;
+    status: ApplicationStatus;
+    nextFollowUp: string;
+    strategicNotes: string;
+    attachments: Attachment[];
+    linkedContactIds: string[];
+    createdAt: string;
+    updatedAt: string;
+    urgency: UrgencyLevel;
+}
+
+export interface JobApplication extends BaseApplication {
+    recordIntent: 'application';
     roleTitle: string;
     source: string;
     jobPostingUrl: string;
     jobId: string;
     location: string;
     resumeVersion: string;
-    actionDate: string;
-    status: ApplicationStatus;
-    nextFollowUp: string;
-    strategicNotes: string;
+}
 
-    // Advanced fields
+export interface OutreachApplication extends BaseApplication {
+    recordIntent: 'outreach' | 'networking';
+    contactName: string;
+    contactEmail?: string;
     subjectLineUsed: string;
     valuePitchSummary: string;
     personalizationNotes: string;
     replyReceived: boolean;
     followUpSent: boolean;
     emailType: EmailType | '';
-    attachments: Attachment[];
-
-    // Source-contextual fields (Phase 3)
-    referralContact?: string;
-    recruiterName?: string;
-    contactName?: string;
-    contactEmail?: string;
-
-    // Linked data
-    linkedContactIds: string[];
-
-    // Metadata
-    createdAt: string;
-    updatedAt: string;
-    urgency: UrgencyLevel;
+    roleTitle?: string; // Optional for networking
 }
 
-export type ApplicationFormData = Omit<
-    Application,
-    'id' | 'userId' | 'createdAt' | 'updatedAt' | 'urgency' | 'attachments'
-> & {
-    attachments?: Attachment[];
-};
+export interface RecruiterApplication extends BaseApplication {
+    recordIntent: 'recruiter';
+    recruiterName: string;
+    roleTitle?: string;
+    location?: string;
+}
 
-export type ApplicationDraft = Partial<ApplicationFormData> & {
+export interface FollowUpApplication extends BaseApplication {
+    recordIntent: 'followup';
+    nextFollowUp: string; // Required for this intent
+    strategicNotes: string;
+}
+
+export type Application =
+    | JobApplication
+    | OutreachApplication
+    | RecruiterApplication
+    | FollowUpApplication;
+
+export type ApplicationFormData =
+    | Omit<JobApplication, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'urgency' | 'attachments'> & { attachments?: Attachment[] }
+    | Omit<OutreachApplication, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'urgency' | 'attachments'> & { attachments?: Attachment[] }
+    | Omit<RecruiterApplication, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'urgency' | 'attachments'> & { attachments?: Attachment[] }
+    | Omit<FollowUpApplication, 'id' | 'userId' | 'createdAt' | 'updatedAt' | 'urgency' | 'attachments'> & { attachments?: Attachment[] };
+
+export type ApplicationDraft = {
+    data: Partial<ApplicationFormData>;
     savedAt: string;
+    version: number;
 };
