@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { SPRING, DURATION } from '@/lib/motionTokens';
 import type { ReactNode } from 'react';
 
 interface KPICardProps {
@@ -18,36 +19,56 @@ export function KPICard({
     title,
     value,
     icon,
-    iconBg = 'bg-[#007AFF]/5',
+    iconBg = 'bg-blue-apple/10',
     trend,
     trendPositive,
     delay = 0,
 }: KPICardProps) {
     return (
         <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4, delay, ease: [0.23, 1, 0.32, 1] }}
-            whileHover={{ y: -4 }}
-            className="bg-white rounded-[22px] border border-[#000000]/05 p-6 shadow-apple-md transition-shadow hover:shadow-apple-lg"
+            transition={{ ...SPRING.smooth, delay }}
+            whileHover={{ y: -4, transition: { duration: DURATION.fast } }}
+            className={cn(
+                'bg-surface dark:bg-surface rounded-lg border border-border-subtle dark:border-border-subtle',
+                'p-6 shadow-elevation-2 hover:shadow-elevation-3 dark:hover:shadow-elevation-4',
+                'transition-all duration-200'
+            )}
         >
             <div className="flex items-start justify-between mb-4">
-                <p className="text-[13px] font-medium text-[#86868B] uppercase tracking-wider">{title}</p>
-                <div className={cn('w-10 h-10 rounded-[12px] flex items-center justify-center', iconBg)}>
+                <p className="text-xs font-medium text-text-tertiary dark:text-text-tertiary uppercase tracking-wider">
+                    {title}
+                </p>
+                <motion.div
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ duration: DURATION.fast }}
+                    className={cn('w-10 h-10 rounded-md flex items-center justify-center', iconBg)}
+                >
                     {icon}
-                </div>
+                </motion.div>
             </div>
             <motion.div
-                initial={{ opacity: 0, x: -10 }}
+                initial={{ opacity: 0, x: -12 }}
                 animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.5, delay: delay + 0.1, ease: [0.23, 1, 0.32, 1] }}
+                transition={{ ...SPRING.smooth, delay: delay + DURATION.fast }}
             >
-                <p className="text-[32px] font-semibold text-[#1D1D1F] tracking-tight tabular-nums">{value}</p>
+                <p className="text-4xl font-semibold text-text-primary dark:text-text-primary tracking-tight tabular-nums">
+                    {value}
+                </p>
             </motion.div>
             {trend && (
-                <p className={cn('text-[13px] mt-2 font-medium', trendPositive ? 'text-[#34C759]' : 'text-[#86868B]')}>
+                <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: DURATION.normal, delay: delay + DURATION.normal }}
+                    className={cn(
+                        'text-sm mt-3 font-medium',
+                        trendPositive ? 'text-success dark:text-success' : 'text-text-tertiary dark:text-text-tertiary'
+                    )}
+                >
                     {trend}
-                </p>
+                </motion.p>
             )}
         </motion.div>
     );

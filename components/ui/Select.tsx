@@ -27,11 +27,11 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         const inputId = id ?? label?.toLowerCase().replace(/\s+/g, '-');
 
         return (
-            <div className={cn('flex flex-col gap-1', containerClassName)}>
+            <div className={cn('flex flex-col gap-2', containerClassName)}>
                 {label && (
-                    <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+                    <label htmlFor={inputId} className="text-sm font-medium text-text-primary dark:text-text-primary">
                         {label}
-                        {props.required && <span className="text-red-500 ml-1">*</span>}
+                        {props.required && <span className="text-danger ml-1">*</span>}
                     </label>
                 )}
                 <div className="relative">
@@ -39,13 +39,16 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                         ref={ref}
                         id={inputId}
                         aria-invalid={!!error}
+                        aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
                         className={cn(
-                            'w-full appearance-none rounded-lg border bg-white px-3 py-2 pr-10 text-sm text-gray-900 transition-colors',
-                            'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-                            'disabled:bg-gray-50 disabled:cursor-not-allowed',
+                            'w-full appearance-none rounded-base border bg-surface px-3 py-2 pr-10 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-150',
+                            'focus:outline-none focus:ring-2 focus:ring-blue-apple focus:ring-offset-2 focus:border-transparent',
+                            'dark:focus:ring-offset-neutral-900 dark:bg-surface',
+                            'disabled:bg-neutral-50 disabled:text-text-disabled disabled:cursor-not-allowed dark:disabled:bg-neutral-800',
+                            'hover:border-border-strong',
                             error
-                                ? 'border-red-400'
-                                : 'border-gray-300 hover:border-gray-400',
+                                ? 'border-danger focus:ring-danger'
+                                : 'border-border-default',
                             className
                         )}
                         {...props}
@@ -61,10 +64,10 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
                             </option>
                         ))}
                     </select>
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-tertiary pointer-events-none dark:text-text-tertiary" />
                 </div>
-                {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-                {hint && !error && <p className="text-xs text-gray-500">{hint}</p>}
+                {error && <p id={`${inputId}-error`} role="alert" className="text-xs text-danger font-medium dark:text-danger">{error}</p>}
+                {hint && !error && <p id={`${inputId}-hint`} className="text-xs text-text-tertiary dark:text-text-tertiary">{hint}</p>}
             </div>
         );
     }

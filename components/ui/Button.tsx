@@ -4,8 +4,7 @@ import React, { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { Loader2 } from 'lucide-react';
-
-const SMOOTH_SPRING = { type: 'spring', stiffness: 500, damping: 30 };
+import { SPRING } from '@/lib/motionTokens';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
 type ButtonSize = 'sm' | 'md' | 'lg';
@@ -20,21 +19,21 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
     primary:
-        'bg-[#007AFF] text-white shadow-apple-sm hover:bg-[#0062CC]',
+        'bg-blue-apple text-white shadow-elevation-2 hover:bg-blue-hover active:bg-blue-active dark:bg-blue-apple dark:hover:bg-blue-hover',
     secondary:
-        'bg-[#F2F2F7] text-[#1D1D1F] hover:bg-[#E5E5EA]',
+        'bg-neutral-100 text-text-primary hover:bg-neutral-200 dark:bg-neutral-800 dark:text-text-primary dark:hover:bg-neutral-700',
     ghost:
-        'bg-transparent text-[#007AFF] hover:bg-[#007AFF]/5',
+        'bg-transparent text-blue-apple hover:bg-blue-apple/5 dark:hover:bg-blue-apple/10',
     danger:
-        'bg-[#FF3B30] text-white shadow-apple-sm hover:bg-[#D70015]',
+        'bg-danger text-white shadow-elevation-2 hover:bg-red-600 active:bg-red-700 dark:hover:bg-red-700',
     outline:
-        'border border-[#D1D1D6] bg-white text-[#1D1D1F] shadow-apple-sm hover:bg-[#F2F2F7]',
+        'border border-border-default bg-surface text-text-primary shadow-elevation-1 hover:bg-neutral-50 dark:border-border-default dark:hover:bg-neutral-900',
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-    sm: 'h-8 px-3 text-[13px] gap-1.5',
-    md: 'h-10 px-4 text-[14px] gap-2',
-    lg: 'h-11 px-6 text-[16px] gap-2.5',
+    sm: 'h-8 px-3 text-xs gap-1.5',
+    md: 'h-10 px-4 text-sm gap-2',
+    lg: 'h-11 px-6 text-base gap-2.5',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -56,14 +55,15 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
             <motion.button
                 ref={ref as any}
                 disabled={disabled || isLoading}
-                whileHover={{ scale: 1.01 }}
-                whileTap={{ scale: 0.98 }}
-                transition={SMOOTH_SPRING}
+                whileHover={!disabled ? { scale: 1.02 } : {}}
+                whileTap={!disabled ? { scale: 0.98 } : {}}
+                transition={SPRING.snappy}
                 className={cn(
-                    'inline-flex items-center justify-center font-medium rounded-[14px] transition-all duration-150 active:duration-75',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#007AFF]/40 focus-visible:ring-offset-1',
-                    'disabled:opacity-40 disabled:cursor-not-allowed',
-                    'tap-active',
+                    'inline-flex items-center justify-center font-medium rounded-lg transition-all duration-150',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2',
+                    'dark:focus-visible:ring-offset-neutral-900',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                    'active:duration-75',
                     variantClasses[variant],
                     sizeClasses[size],
                     className
@@ -71,11 +71,11 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
                 {...props as any}
             >
                 {isLoading ? (
-                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                    <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />
                 ) : (
                     leftIcon && <span className="shrink-0">{leftIcon}</span>
                 )}
-                <span className="relative z-10">{children}</span>
+                <span>{children}</span>
                 {!isLoading && rightIcon && (
                     <span className="shrink-0">{rightIcon}</span>
                 )}

@@ -4,6 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SPRING } from '@/lib/motionTokens';
 
 interface ModalProps {
     isOpen: boolean;
@@ -60,7 +61,7 @@ export function Modal({
     }, [isOpen]);
 
     return (
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
             {isOpen && (
                 <>
                     <motion.div
@@ -68,49 +69,52 @@ export function Modal({
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.15 }}
-                        className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                        className="fixed inset-0 z-overlay bg-black/40 backdrop-blur-sm"
                         onClick={onClose}
                         aria-hidden="true"
                     />
-                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="fixed inset-0 z-modal flex items-center justify-center p-4">
                         <motion.div
                             ref={dialogRef}
                             role="dialog"
                             aria-modal="true"
                             aria-labelledby={title ? 'modal-title' : undefined}
                             aria-describedby={description ? 'modal-description' : undefined}
-                            initial={{ opacity: 0, scale: 0.98, y: 12 }}
+                            initial={{ opacity: 0, scale: 0.95, y: 20 }}
                             animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.98, y: 12 }}
-                            transition={{ type: 'spring', stiffness: 450, damping: 35, mass: 0.8 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                            transition={SPRING.smooth}
                             className={cn(
-                                'bg-white rounded-2xl shadow-2xl w-full relative max-h-[90vh] overflow-y-auto',
+                                'bg-surface rounded-2xl shadow-overlay w-full relative max-h-[90vh] overflow-y-auto',
+                                'dark:bg-surface dark:shadow-overlay',
                                 sizeClasses[size],
                                 className
                             )}
                             onClick={(e) => e.stopPropagation()}
                         >
                             {(title || description) && (
-                                <div className="flex items-start justify-between p-6 border-b border-gray-100">
-                                    <div>
+                                <div className="flex items-start justify-between p-6 border-b border-border-subtle dark:border-border-subtle">
+                                    <div className="flex-1">
                                         {title && (
-                                            <h2 id="modal-title" className="text-lg font-semibold text-gray-900">
+                                            <h2 id="modal-title" className="text-xl font-semibold text-text-primary dark:text-text-primary">
                                                 {title}
                                             </h2>
                                         )}
                                         {description && (
-                                            <p id="modal-description" className="text-sm text-gray-500 mt-1">
+                                            <p id="modal-description" className="text-sm text-text-secondary mt-2 dark:text-text-secondary">
                                                 {description}
                                             </p>
                                         )}
                                     </div>
-                                    <button
+                                    <motion.button
                                         onClick={onClose}
-                                        className="ml-4 shrink-0 text-gray-400 hover:text-gray-600 transition-colors rounded-lg p-1 hover:bg-gray-100"
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        className="ml-4 shrink-0 text-text-tertiary hover:text-text-secondary transition-colors rounded-lg p-1.5 hover:bg-neutral-100 dark:hover:bg-neutral-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900"
                                         aria-label="Close dialog"
                                     >
                                         <X className="w-5 h-5" />
-                                    </button>
+                                    </motion.button>
                                 </div>
                             )}
                             <div className="p-6">{children}</div>

@@ -5,11 +5,31 @@ import { cn } from '@/lib/utils';
 import { ApplicationStatus } from '@/types';
 
 const STATUS_CONFIG: Record<ApplicationStatus, { label: string; dot: string; pill: string }> = {
-    draft: { label: 'Draft', dot: 'bg-neutral-400', pill: 'bg-neutral-100 text-neutral-600 ring-neutral-200 shadow-[0_1px_2px_rgba(0,0,0,0.03)]' },
-    applied: { label: 'Applied', dot: 'bg-blue-500', pill: 'bg-blue-50/80 text-blue-700 ring-blue-200/60 shadow-[0_2px_8px_-2px_rgba(59,130,246,0.12)]' },
-    interviewing: { label: 'Interviewing', dot: 'bg-amber-500', pill: 'bg-amber-50/80 text-amber-700 ring-amber-200/60 shadow-[0_2px_8px_-2px_rgba(245,158,11,0.12)]' },
-    offer: { label: 'Offer', dot: 'bg-emerald-500', pill: 'bg-emerald-50/80 text-emerald-700 ring-emerald-200/60 shadow-[0_2px_8px_-2px_rgba(16,185,129,0.12)]' },
-    rejected: { label: 'Rejected', dot: 'bg-red-400', pill: 'bg-red-50/80 text-red-600 ring-red-200/60 shadow-[0_2px_8px_-2px_rgba(239,68,68,0.12)]' },
+    draft: {
+        label: 'Draft',
+        dot: 'bg-neutral-500',
+        pill: 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 border border-neutral-200 dark:border-neutral-700',
+    },
+    applied: {
+        label: 'Applied',
+        dot: 'bg-blue-apple',
+        pill: 'bg-blue-apple/10 dark:bg-blue-apple/15 text-blue-apple dark:text-blue-apple border border-blue-apple/20 dark:border-blue-apple/30',
+    },
+    interviewing: {
+        label: 'Interviewing',
+        dot: 'bg-warning',
+        pill: 'bg-warning/10 dark:bg-warning/15 text-warning dark:text-warning border border-warning/20 dark:border-warning/30',
+    },
+    offer: {
+        label: 'Offer',
+        dot: 'bg-success',
+        pill: 'bg-success/10 dark:bg-success/15 text-success dark:text-success border border-success/20 dark:border-success/30',
+    },
+    rejected: {
+        label: 'Rejected',
+        dot: 'bg-danger',
+        pill: 'bg-danger/10 dark:bg-danger/15 text-danger dark:text-danger border border-danger/20 dark:border-danger/30',
+    },
 };
 
 interface StatusPillProps {
@@ -23,12 +43,15 @@ export function StatusPill({ status, className, showDot = true }: StatusPillProp
     if (!cfg) return null;
 
     return (
-        <span className={cn(
-            'inline-flex items-center gap-1.5 px-2.5 h-6 rounded-full text-[11px] font-semibold uppercase tracking-wide ring-1 select-none whitespace-nowrap',
-            cfg.pill,
-            className
-        )}>
-            {showDot && <span className={cn('w-1.5 h-1.5 rounded-full shrink-0', cfg.dot)} />}
+        <span
+            className={cn(
+                'inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider select-none whitespace-nowrap',
+                'shadow-elevation-1 transition-all duration-150',
+                cfg.pill,
+                className
+            )}
+        >
+            {showDot && <span className={cn('w-2 h-2 rounded-full shrink-0', cfg.dot)} />}
             {cfg.label}
         </span>
     );

@@ -20,14 +20,15 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/authContext';
 import { useToast } from '@/lib/toastContext';
+import { SPRING, EASING, DURATION } from '@/lib/motionTokens';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
 
-const SIDEBAR_WIDTH_EXPANDED = 272;
-const SIDEBAR_WIDTH_COLLAPSED = 72;
+const SIDEBAR_WIDTH_EXPANDED = 260;
+const SIDEBAR_WIDTH_COLLAPSED = 80;
 const SIDEBAR_WIDTH_MOBILE = 288;
-const ANIMATION_EASING: [number, number, number, number] = [0.4, 0, 0.2, 1];
-const ANIMATION_DURATION = 0.22;
+const ANIMATION_EASING: [number, number, number, number] = EASING.standard;
+const ANIMATION_DURATION = DURATION.normal;
 const TOOLTIP_DELAY_MS = 200;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -102,11 +103,11 @@ function Tooltip({ label, children, disabled }: TooltipProps) {
                 {visible && (
                     <motion.div
                         role="tooltip"
-                        initial={{ opacity: 0, x: -6 }}
+                        initial={{ opacity: 0, x: -8 }}
                         animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -4 }}
-                        transition={{ duration: 0.12 }}
-                        className="absolute left-full ml-3 z-[999] pointer-events-none whitespace-nowrap rounded-[6px] bg-neutral-900 px-2 py-1.5 text-[12px] leading-none text-white shadow-lg"
+                        exit={{ opacity: 0, x: -6 }}
+                        transition={{ duration: DURATION.fast }}
+                        className="absolute left-full ml-3 z-tooltip pointer-events-none whitespace-nowrap rounded-md bg-neutral-900 dark:bg-neutral-800 px-3 py-2 text-xs leading-none text-white shadow-overlay"
                     >
                         {label}
                         <span
@@ -144,22 +145,22 @@ function NavItemComponent({ item, active, collapsed, onClick }: NavItemComponent
                 onClick={onClick}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                    'relative flex items-center h-10 rounded-[10px] transition-colors duration-150',
-                    'outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
+                    'relative flex items-center h-10 rounded-lg transition-all duration-150',
+                    'outline-none focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900',
                     collapsed
                         ? 'w-10 mx-auto justify-center px-0'
                         : 'gap-3 px-3',
                     active
-                        ? 'text-blue-600'
-                        : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800'
+                        ? 'text-blue-apple'
+                        : 'text-text-secondary hover:bg-neutral-100 hover:text-text-primary dark:hover:bg-neutral-800'
                 )}
             >
                 {/* Animated active background pill */}
                 {active && (
                     <motion.span
                         layoutId="active-nav-pill"
-                        className="absolute inset-0 rounded-[10px] bg-blue-600/[0.09]"
-                        transition={{ duration: ANIMATION_DURATION, ease: ANIMATION_EASING }}
+                        className="absolute inset-0 rounded-lg bg-blue-apple/10 dark:bg-blue-apple/15"
+                        transition={{ ...SPRING.smooth, duration: undefined }}
                     />
                 )}
 
@@ -168,19 +169,18 @@ function NavItemComponent({ item, active, collapsed, onClick }: NavItemComponent
                     strokeWidth={1.75}
                     className={cn(
                         'relative shrink-0 transition-colors duration-150',
-                        active ? 'text-blue-600' : 'text-neutral-400'
+                        active ? 'text-blue-apple dark:text-blue-apple' : 'text-text-tertiary dark:text-text-tertiary'
                     )}
                 />
 
                 {!collapsed && (
                     <span
                         className={cn(
-                            'relative truncate',
+                            'relative truncate text-sm',
                             active
-                                ? 'text-blue-600 font-semibold'
-                                : 'text-neutral-600 font-medium'
+                                ? 'text-blue-apple dark:text-blue-apple font-semibold'
+                                : 'text-text-primary dark:text-text-primary font-medium'
                         )}
-                        style={{ fontSize: '13.5px', lineHeight: '1.2' }}
                     >
                         {item.label}
                     </span>
@@ -190,7 +190,7 @@ function NavItemComponent({ item, active, collapsed, onClick }: NavItemComponent
     );
 }
 
-// ─── User Avatar ──────────────────────────────────────────────────────────────
+// ─── User Avatar ───────────────────────��──────────────────────────────────────
 
 function UserAvatar({ name }: { name: string }) {
     const initials = name
@@ -235,7 +235,7 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
 
             {/* ─── Zone 1: Header ─────────────────────────────────── */}
             <div
-                className="flex items-center h-16 px-4 border-b border-neutral-100 shrink-0"
+                className="flex items-center h-16 px-4 border-b border-border-subtle dark:border-border-subtle shrink-0 bg-surface dark:bg-surface"
             >
                 {/* Logo */}
                 <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-blue-600 to-violet-600 flex items-center justify-center shadow-sm shrink-0">
@@ -251,12 +251,12 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
                         className="ml-3 min-w-0 flex-1"
                     >
                         <p
-                            className="font-semibold text-neutral-900 truncate leading-tight"
+                            className="font-semibold text-text-primary dark:text-text-primary truncate leading-tight"
                             style={{ fontSize: 14, letterSpacing: '0.01em' }}
                         >
                             JobTrack
                         </p>
-                        <p className="text-[10px] text-neutral-400 font-medium tracking-wider truncate leading-tight">
+                        <p className="text-xs text-text-tertiary dark:text-text-tertiary font-medium tracking-wider truncate leading-tight">
                             CRM
                         </p>
                     </motion.div>
@@ -273,9 +273,9 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
                                 : 'Collapse sidebar'
                     }
                     className={cn(
-                        'flex items-center justify-center w-7 h-7 rounded-lg text-neutral-400',
-                        'hover:bg-neutral-100 hover:text-neutral-700 transition-colors duration-150',
-                        'focus-visible:ring-2 focus-visible:ring-blue-500 outline-none',
+                        'flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary dark:text-text-tertiary',
+                        'hover:bg-neutral-100 hover:text-text-primary dark:hover:bg-neutral-800 dark:hover:text-text-primary transition-colors duration-150',
+                        'focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 outline-none',
                         collapsed ? 'ml-2' : 'ml-auto'
                     )}
                 >
@@ -291,13 +291,13 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
             {/* ─── Zone 2: Primary Navigation ─────────────────────── */}
             <nav
                 aria-label="Primary navigation"
-                className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 min-h-0"
+                className="flex-1 overflow-y-auto overflow-x-hidden py-3 px-2 min-h-0 bg-surface dark:bg-surface"
                 style={{ scrollbarWidth: 'thin', scrollbarColor: '#e5e7eb transparent' }}
             >
                 {/* Section label */}
                 {!collapsed && (
                     <p
-                        className="px-3 mt-1 mb-2 font-medium text-neutral-400 tracking-[0.08em] uppercase"
+                        className="px-3 mt-1 mb-2 font-medium text-text-tertiary dark:text-text-tertiary tracking-wider uppercase"
                         style={{ fontSize: 11 }}
                     >
                         Workspace
@@ -317,7 +317,7 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
                 </div>
 
                 {/* ─── Zone 3: Utilities (below divider) ──────────── */}
-                <div className="mt-4 pt-4 border-t border-neutral-100 space-y-0.5">
+                <div className="mt-4 pt-4 border-t border-border-subtle dark:border-border-subtle space-y-0.5">
                     {UTILITY_NAV.map((item) => (
                         <NavItemComponent
                             key={item.href}
@@ -331,14 +331,14 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
             </nav>
 
             {/* ─── Zone 4: User Footer ────────────────────────────── */}
-            <div className="shrink-0 border-t border-neutral-100 p-3" style={{ minHeight: 72 }}>
+            <div className="shrink-0 border-t border-border-subtle dark:border-border-subtle p-3 bg-surface dark:bg-surface" style={{ minHeight: 72 }}>
                 {collapsed ? (
                     /* Collapsed: avatar only with tooltip */
                     <Tooltip label={user?.name ?? 'Account'} disabled={false}>
                         <button
                             onClick={handleLogout}
                             aria-label={`Account options for ${user?.name ?? 'user'}`}
-                            className="w-10 h-10 mx-auto flex items-center justify-center rounded-[10px] hover:bg-neutral-100 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            className="w-10 h-10 mx-auto flex items-center justify-center rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900"
                         >
                             {user
                                 ? <UserAvatar name={user.name} />
@@ -352,14 +352,12 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
                         {user && <UserAvatar name={user.name} />}
                         <div className="flex-1 min-w-0">
                             <p
-                                className="font-medium text-neutral-800 truncate leading-tight"
-                                style={{ fontSize: 13 }}
+                                className="font-medium text-text-primary dark:text-text-primary truncate leading-tight text-sm"
                             >
                                 {user?.name ?? 'Account'}
                             </p>
                             <p
-                                className="text-neutral-400 truncate leading-tight mt-0.5"
-                                style={{ fontSize: 11 }}
+                                className="text-text-tertiary dark:text-text-tertiary truncate leading-tight mt-0.5 text-xs"
                             >
                                 {user?.email ?? ''}
                             </p>
@@ -369,9 +367,9 @@ function SidebarContent({ collapsed, onToggle, onClose, isMobileDrawer }: Sideba
                                 onClick={handleLogout}
                                 aria-label="Sign out"
                                 className={cn(
-                                    'flex items-center justify-center w-7 h-7 rounded-lg text-neutral-400',
-                                    'hover:bg-red-50 hover:text-red-500 transition-colors duration-150',
-                                    'focus-visible:ring-2 focus-visible:ring-blue-500 outline-none'
+                                    'flex items-center justify-center w-7 h-7 rounded-lg text-text-tertiary dark:text-text-tertiary',
+                                    'hover:bg-danger/10 hover:text-danger dark:hover:bg-danger/15 transition-colors duration-150',
+                                    'focus-visible:ring-2 focus-visible:ring-blue-apple focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900 outline-none'
                                 )}
                             >
                                 <LogOut size={14} />
@@ -406,11 +404,11 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                 animate={{ width: collapsed ? SIDEBAR_WIDTH_COLLAPSED : SIDEBAR_WIDTH_EXPANDED }}
                 transition={transition}
                 className={cn(
-                    'fixed left-0 top-0 bottom-0 z-30',
+                    'fixed left-0 top-0 bottom-0 z-sidebar-nav',
                     'hidden lg:flex flex-col',
-                    'bg-white border-r border-neutral-100 overflow-hidden shrink-0'
+                    'bg-surface dark:bg-surface border-r border-border-subtle dark:border-border-subtle overflow-hidden shrink-0'
                 )}
-                style={{ boxShadow: '1px 0 0 0 rgba(0,0,0,0.03)' }}
+                style={{ boxShadow: 'inset -1px 0 0 0 var(--border-subtle)' }}
                 aria-label="Main navigation"
             >
                 <SidebarContent collapsed={collapsed} onToggle={onToggle} />
@@ -426,9 +424,8 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="fixed inset-0 z-40 lg:hidden"
-                            style={{ background: 'rgba(0,0,0,0.3)', backdropFilter: 'blur(4px)' }}
+                            transition={{ duration: DURATION.fast }}
+                            className="fixed inset-0 z-overlay lg:hidden bg-black/40 backdrop-blur-sm"
                             onClick={onMobileClose}
                             aria-hidden="true"
                         />
@@ -442,12 +439,12 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
                             transition={
                                 shouldReduceMotion
                                     ? { duration: 0 }
-                                    : { duration: 0.25, ease: ANIMATION_EASING }
+                                    : { ...SPRING.smooth, duration: undefined }
                             }
                             style={{ width: SIDEBAR_WIDTH_MOBILE }}
                             className={cn(
-                                'fixed left-0 top-0 bottom-0 z-50 flex flex-col',
-                                'lg:hidden bg-white border-r border-neutral-100 overflow-hidden'
+                                'fixed left-0 top-0 bottom-0 z-modal flex flex-col',
+                                'lg:hidden bg-surface dark:bg-surface border-r border-border-subtle dark:border-border-subtle overflow-hidden'
                             )}
                             role="dialog"
                             aria-modal="true"

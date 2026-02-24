@@ -13,34 +13,34 @@ interface BadgeProps {
 }
 
 const variantStyles: Record<BadgeVariant, string> = {
-    default: 'bg-[#007AFF]/10 text-[#007AFF] border-[#007AFF]/10',
-    success: 'bg-[#34C759]/10 text-[#34C759] border-[#34C759]/10',
-    warning: 'bg-[#FF9500]/10 text-[#FF9500] border-[#FF9500]/10',
-    danger: 'bg-[#FF3B30]/10 text-[#FF3B30] border-[#FF3B30]/10',
-    info: 'bg-[#5856D6]/10 text-[#5856D6] border-[#5856D6]/10',
-    neutral: 'bg-[#8E8E93]/10 text-[#8E8E93] border-[#8E8E93]/10',
+    default: 'bg-blue-apple/10 text-blue-apple border-blue-apple/20 dark:bg-blue-apple/15 dark:text-blue-apple dark:border-blue-apple/30',
+    success: 'bg-success/10 text-success border-success/20 dark:bg-success/15 dark:border-success/30',
+    warning: 'bg-warning/10 text-warning border-warning/20 dark:bg-warning/15 dark:border-warning/30',
+    danger: 'bg-danger/10 text-danger border-danger/20 dark:bg-danger/15 dark:border-danger/30',
+    info: 'bg-info/10 text-info border-info/20 dark:bg-info/15 dark:border-info/30',
+    neutral: 'bg-neutral-400/10 text-neutral-600 border-neutral-400/20 dark:bg-neutral-600/20 dark:text-neutral-300 dark:border-neutral-600/30',
 };
 
 const dotColors: Record<BadgeVariant, string> = {
-    default: 'bg-[#007AFF]',
-    success: 'bg-[#34C759]',
-    warning: 'bg-[#FF9500]',
-    danger: 'bg-[#FF3B30]',
-    info: 'bg-[#5856D6]',
-    neutral: 'bg-[#8E8E93]',
+    default: 'bg-blue-apple',
+    success: 'bg-success',
+    warning: 'bg-warning',
+    danger: 'bg-danger',
+    info: 'bg-info',
+    neutral: 'bg-neutral-500',
 };
 
 export function Badge({ variant = 'default', children, className, dot = false }: BadgeProps) {
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-[6px] text-[11px] font-semibold uppercase tracking-wider border',
+                'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border',
                 variantStyles[variant],
                 className
             )}
         >
             {dot && (
-                <span className={cn('w-1 h-1 rounded-full shrink-0', dotColors[variant])} />
+                <span className={cn('w-2 h-2 rounded-full shrink-0', dotColors[variant])} />
             )}
             {children}
         </span>

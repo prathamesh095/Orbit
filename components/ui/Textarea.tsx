@@ -36,11 +36,11 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         const charCount = typeof value === 'string' ? value.length : 0;
 
         return (
-            <div className={cn('flex flex-col gap-1', containerClassName)}>
+            <div className={cn('flex flex-col gap-2', containerClassName)}>
                 {label && (
-                    <label htmlFor={inputId} className="text-sm font-medium text-gray-700">
+                    <label htmlFor={inputId} className="text-sm font-medium text-text-primary dark:text-text-primary">
                         {label}
-                        {props.required && <span className="text-red-500 ml-1">*</span>}
+                        {props.required && <span className="text-danger ml-1">*</span>}
                     </label>
                 )}
                 <textarea
@@ -49,30 +49,32 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
                     value={value}
                     onChange={onChange}
                     aria-invalid={!!error}
-                    aria-describedby={error ? `${inputId}-error` : undefined}
+                    aria-describedby={error ? `${inputId}-error` : hint ? `${inputId}-hint` : undefined}
                     className={cn(
-                        'w-full rounded-lg border bg-white px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 transition-colors resize-none',
-                        'focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500',
-                        'disabled:bg-gray-50 disabled:cursor-not-allowed',
+                        'w-full rounded-base border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary transition-all duration-150 resize-none',
+                        'focus:outline-none focus:ring-2 focus:ring-blue-apple focus:ring-offset-2 focus:border-transparent',
+                        'dark:focus:ring-offset-neutral-900 dark:bg-surface',
+                        'disabled:bg-neutral-50 disabled:text-text-disabled disabled:cursor-not-allowed dark:disabled:bg-neutral-800',
+                        'hover:border-border-strong',
                         error
-                            ? 'border-red-400 focus:ring-red-400'
-                            : 'border-gray-300 hover:border-gray-400',
+                            ? 'border-danger focus:ring-danger'
+                            : 'border-border-default',
                         className
                     )}
                     {...props}
                 />
-                <div className="flex justify-between">
-                    {error ? (
-                        <p id={`${inputId}-error`} role="alert" className="text-xs text-red-600">
-                            {error}
-                        </p>
-                    ) : hint ? (
-                        <p className="text-xs text-gray-500">{hint}</p>
-                    ) : (
-                        <span />
-                    )}
+                <div className="flex justify-between items-center gap-2">
+                    <div>
+                        {error ? (
+                            <p id={`${inputId}-error`} role="alert" className="text-xs text-danger font-medium dark:text-danger">
+                                {error}
+                            </p>
+                        ) : hint ? (
+                            <p id={`${inputId}-hint`} className="text-xs text-text-tertiary dark:text-text-tertiary">{hint}</p>
+                        ) : null}
+                    </div>
                     {maxChars && (
-                        <p className={cn('text-xs', charCount > maxChars ? 'text-red-500' : 'text-gray-400')}>
+                        <p className={cn('text-xs flex-shrink-0', charCount > maxChars ? 'text-danger dark:text-danger font-medium' : 'text-text-tertiary dark:text-text-tertiary')}>
                             {charCount}/{maxChars}
                         </p>
                     )}
