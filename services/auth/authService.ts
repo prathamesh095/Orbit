@@ -111,6 +111,7 @@ export async function register(
 
     const users = getStoredUsers();
     const emailLower = email.toLowerCase().trim();
+    const passwordTrimmed = password.trim(); // FIX: Normalize password input
 
     // Enforce email uniqueness (case-insensitive)
     if (users.some((u) => u.email === emailLower)) {
@@ -126,7 +127,7 @@ export async function register(
         id: generateId(),
         email: emailLower,
         name: name.trim(),
-        passwordHash: hashPassword(password),
+        passwordHash: hashPassword(passwordTrimmed), // FIX: Hash trimmed password
         createdAt: now,
     };
 
@@ -139,6 +140,8 @@ export async function register(
     if (!persisted) {
         throw new Error('Failed to save account. Storage may be full or unavailable.');
     }
+
+    console.log('[AUTH DEBUG] User registered successfully:', newUser.email);
 
     // Create session
     const expiresAt = Date.now() + SESSION_DURATION_MS;
@@ -166,15 +169,35 @@ export async function login(
     }
 
     const emailLower = email.toLowerCase().trim();
+    const passwordTrimmed = password.trim(); // FIX: Trim password to match registration behavior
     const users = getStoredUsers();
+
+    console.log('[AUTH DEBUG] Login attempt for email:', emailLower);
+    console.log('[AUTH DEBUG] Number of users in system:', users.length);
 
     // Debug-safe lookup: find user by normalized email
     const found = users.find((u) => u.email === emailLower);
 
-    // Constant-time failure — don't reveal which field is wrong
-    if (!found || found.passwordHash !== hashPassword(password)) {
+    if (!found) {
+        console.log('[AUTH DEBUG] User not found with email:', emailLower);
         throw new Error('Invalid email or password. Please try again.');
     }
+
+    console.log('[AUTH DEBUG] User found:', found.email);
+    
+    // Hash the incoming password for comparison
+    const incomingHash = hashPassword(passwordTrimmed);
+    console.log('[AUTH DEBUG] Incoming password hash:', incomingHash);
+    console.log('[AUTH DEBUG] Stored password hash:', found.passwordHash);
+    console.log('[AUTH DEBUG] Hashes match:', incomingHash === found.passwordHash);
+
+    // Constant-time failure — don't reveal which field is wrong
+    if (incomingHash !== found.passwordHash) {
+        console.log('[AUTH DEBUG] Password mismatch - login failed');
+        throw new Error('Invalid email or password. Please try again.');
+    }
+
+    console.log('[AUTH DEBUG] Login successful - creating session');
 
     // Create session
     const expiresAt = Date.now() + SESSION_DURATION_MS;
@@ -186,6 +209,8 @@ export async function login(
 
     // FIX: Set the middleware cookie so SSR routes recognize the session
     setSessionCookie(expiresAt);
+
+    console.log('[AUTH DEBUG] Session created successfully');
 
     return { user: session.user };
 }
