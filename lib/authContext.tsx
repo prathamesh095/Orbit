@@ -10,6 +10,7 @@ import React, {
 } from 'react';
 import type { User } from '@/types';
 import * as authService from '@/services/auth/authService';
+import { saveSession, clearSession } from '@/services/storage/storageService';
 
 interface AuthContextValue {
     user: User | null;
@@ -76,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 // Server set HTTP-only cookie, update state
                 setUser(data.user);
                 // Also update localStorage session for hydration
-                authService.saveSession({
+                saveSession({
                     user: data.user,
                     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
                 });
@@ -108,7 +109,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (data.success && data.user) {
                 setUser(data.user);
                 // Also update localStorage session for hydration
-                authService.saveSession({
+                saveSession({
                     user: data.user,
                     expiresAt: Date.now() + 24 * 60 * 60 * 1000,
                 });
@@ -130,12 +131,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             });
 
             // Clear client state
-            authService.logout();
+            clearSession();
             setUser(null);
         } catch (error) {
             console.error('[AUTH] Logout error:', error);
             // Clear state anyway
-            authService.logout();
+            clearSession();
             setUser(null);
         }
     }, []);
