@@ -204,40 +204,14 @@ export function saveUserSettings(userId: string, settings: AppSettings): void {
     safeSet(makeKey(userId, 'settings'), settings);
 }
 
-// ─── Auth Store (global, not user-scoped) ─────────────────────────────────────
-
-const AUTH_KEY = 'job_crm:v1:auth:session';
-const USERS_KEY = 'job_crm:v1:auth:users';
-
-export interface StoredUser {
-    id: string;
-    email: string;
-    name: string;
-    passwordHash: string;
-    createdAt: string;
-    resetToken?: string;
-    resetTokenExpiry?: number;
-}
-
-export function getStoredUsers(): StoredUser[] {
-    return safeGet<StoredUser[]>(USERS_KEY, []);
-}
-
-export function saveStoredUsers(users: StoredUser[]): void {
-    safeSet(USERS_KEY, users);
-}
-
-export function getSession(): { user: { id: string; email: string; name: string; createdAt: string }; expiresAt: number } | null {
-    return safeGet(AUTH_KEY, null);
-}
-
-export function saveSession(session: { user: { id: string; email: string; name: string; createdAt: string }; expiresAt: number }): void {
-    safeSet(AUTH_KEY, session);
-}
-
-export function clearSession(): void {
-    safeRemove(AUTH_KEY);
-}
+// ─── Auth Store (REMOVED - Use server-side sessions and HTTP-only cookies) ────
+// DEPRECATED: All authentication is now handled server-side via:
+// - /api/auth/register
+// - /api/auth/login
+// - /api/auth/logout
+// - /api/auth/session
+// Sessions are stored as secure HTTP-only cookies, NOT in localStorage.
+// Do NOT add any client-side auth storage here.
 
 // ─── Templates ────────────────────────────────────────────────────────────────
 
