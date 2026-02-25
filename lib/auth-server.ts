@@ -8,14 +8,23 @@ const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 // Parse IP address from x-forwarded-for header (takes first IP if multiple)
 export function parseIpAddress(ipString: string): string {
   if (!ipString || ipString === 'unknown') return 'unknown';
+  
   // x-forwarded-for can be "IP1, IP2, IP3" - extract first IP
   const ips = ipString.split(',').map(ip => ip.trim());
-  const firstIp = ips[0];
+  const firstIp = ips[0]?.trim();
   
-  // Validate IP format (basic check)
-  if (firstIp && /^[\d.]+$|^[\da-f:]+$/i.test(firstIp)) {
-    return firstIp;
+  // Validate IP format (IPv4: xxx.xxx.xxx.xxx or IPv6)
+  if (firstIp) {
+    // IPv4 check: basic format validation
+    const isValidIPv4 = /^(\d{1,3}\.){3}\d{1,3}$/.test(firstIp);
+    // IPv6 check: contains colons (simplified)
+    const isValidIPv6 = firstIp.includes(':') && !firstIp.includes(',');
+    
+    if (isValidIPv4 || isValidIPv6) {
+      return firstIp;
+    }
   }
+  
   return 'unknown';
 }
 
@@ -246,12 +255,18 @@ export async function logAuthEvent(
   errorMessage?: string
 ): Promise<boolean> {
   try {
+    // Re-parse IP in case it's malformed (defensive programming)
+    const cleanIpAddress = parseIpAddress(ipAddress);
+    
+    // Convert 'unknown' to null for PostgreSQL INET type compatibility
+    const dbIpAddress = cleanIpAddress === 'unknown' ? null : cleanIpAddress;
+    
     const { error } = await supabaseAdmin
       .from('auth_logs')
       .insert({
         user_id: userId,
         event_type: eventType,
-        ip_address: ipAddress,
+        ip_address: dbIpAddress,
         user_agent: userAgent,
         success,
         error_message: errorMessage || null,
@@ -259,6 +274,7 @@ export async function logAuthEvent(
 
     if (error) {
       console.error('[v0] Error logging auth event:', error);
+      console.error('[v0] Details - userId:', userId, 'eventType:', eventType, 'originalIp:', ipAddress, 'parsedIp:', cleanIpAddress, 'dbIp:', dbIpAddress);
       return false;
     }
 
