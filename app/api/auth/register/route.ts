@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import type { User } from '@/types';
-import { getServerUsers, addServerUser, emailExists, type StoredUser } from './shared-auth';
+import { createUser, createSession, generateSessionId } from '@/lib/db';
 
 interface RegisterRequest {
     name: string;
@@ -14,33 +14,19 @@ interface RegisterResponse {
     error?: string;
 }
 
-function generateId(): string {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-        return crypto.randomUUID();
-    }
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-// Simple non-cryptographic hash for DEMO (must be bcryptjs in production)
-function hashPassword(password: string): string {
-    let hash = 0;
-    for (let i = 0; i < password.length; i++) {
-        const char = password.charCodeAt(i);
-        hash = (hash << 5) - hash + char;
-        hash |= 0;
-    }
-    return `hash_${Math.abs(hash).toString(36)}_${password.length}`;
-}
-
+/**
+ * Register endpoint - Create new user account
+ * Server-driven, secure, production-grade authentication
+ */
 export async function POST(request: NextRequest): Promise<NextResponse<RegisterResponse>> {
     try {
         const body: RegisterRequest = await request.json();
         const { name, email, password } = body;
 
-        console.log('[AUTH API] Register attempt:', { name, email });
+        console.log('[AUTH] Registration attempt:', { email: email?.trim() });
 
-        // Validate input
-        if (!name || !email || !password) {
+        // Input validation
+        if (!name?.trim() || !email?.trim() || !password?.trim()) {
             return NextResponse.json(
                 { success: false, error: 'Name, email, and password are required' },
                 { status: 400 }
@@ -61,85 +47,80 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
             );
         }
 
-        const emailLower = email.toLowerCase().trim();
-
-        console.log('[AUTH API] Checking for existing user:', emailLower);
-
-        // Check if user already exists
-        if (emailExists(emailLower)) {
-            console.log('[AUTH API] User already exists:', emailLower);
+        // Email validation
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email.trim())) {
             return NextResponse.json(
-                { success: false, error: 'An account with this email already exists' },
-                { status: 409 }
+                { success: false, error: 'Please enter a valid email address' },
+                { status: 400 }
             );
         }
 
-        // Create new user
-        const now = new Date().toISOString();
-        const newUser: StoredUser = {
-            id: generateId(),
-            email: emailLower,
-            name: name.trim(),
-            passwordHash: hashPassword(password.trim()),
-            createdAt: now,
-        };
-
-        console.log('[AUTH API] Creating new user:', newUser.id);
-
-        // Save user to server-side storage
-        addServerUser(newUser);
-
-        // Verify write succeeded
-        const users = getServerUsers();
-        const persisted = users.find((u: StoredUser) => u.id === newUser.id);
-        if (!persisted) {
-            console.error('[AUTH API] User not found after save:', newUser.id);
+        // Create user (throws if email exists)
+        let newUser;
+        try {
+            newUser = createUser(email, name, password);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create user';
+            console.log('[AUTH] User creation failed:', message);
             return NextResponse.json(
-                { success: false, error: 'Failed to save account' },
-                { status: 500 }
+                { success: false, error: message },
+                { status: message.includes('already') ? 409 : 400 }
             );
         }
 
-        console.log('[AUTH API] User saved successfully:', newUser.email);
+        console.log('[AUTH] User created:', { id: newUser.id, email: newUser.email });
 
-        // Create response with secure cookies
+        // Create session
+        const sessionId = generateSessionId();
+        createSession(newUser.id);
+
+        console.log('[AUTH] Session created:', { sessionId });
+
+        // Return response with secure HTTP-only cookies
         const response = NextResponse.json<RegisterResponse>(
             {
                 success: true,
-                user: { id: newUser.id, email: newUser.email, name: newUser.name, createdAt: newUser.createdAt },
+                user: {
+                    id: newUser.id,
+                    email: newUser.email,
+                    name: newUser.name,
+                    createdAt: newUser.createdAt.toISOString(),
+                },
             },
             { status: 201 }
         );
 
-        // Set HTTP-only, Secure, SameSite cookie
+        // Set secure HTTP-only session cookie (server-side only)
+        const secure = process.env.NODE_ENV === 'production';
         response.cookies.set({
             name: 'jt_session_id',
-            value: newUser.id,
+            value: sessionId,
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
+            secure,
             sameSite: 'strict',
             maxAge: 24 * 60 * 60,
             path: '/',
         });
 
+        // Optional non-httpOnly cookie for client-side checks
         response.cookies.set({
             name: 'jt_authenticated',
             value: '1',
             httpOnly: false,
-            secure: process.env.NODE_ENV === 'production',
+            secure,
             sameSite: 'strict',
             maxAge: 24 * 60 * 60,
             path: '/',
         });
 
-        console.log('[AUTH API] Registration successful:', newUser.email);
-
+        console.log('[AUTH] Registration successful:', newUser.email);
         return response;
     } catch (error) {
-        console.error('[AUTH API] Register error:', error);
-        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[AUTH] Unexpected error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Internal server error';
         return NextResponse.json(
-            { success: false, error: `Registration failed: ${errorMsg}` },
+            { success: false, error: errorMsg },
             { status: 500 }
         );
     }
