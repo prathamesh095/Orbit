@@ -9,7 +9,7 @@ import React, {
     type ReactNode,
 } from 'react';
 import type { User } from '@/types';
-import * as authService from '@/services/auth/authService';
+import { getCurrentSession, forgotPassword, resetPassword } from '@/services/auth/authService';
 import { saveSession, clearSession } from '@/services/storage/storageService';
 
 interface AuthContextValue {
@@ -33,7 +33,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // Restore session from server on mount
         const restoreSession = async () => {
             try {
-                const session = authService.getCurrentSession();
+                const session = getCurrentSession();
                 if (session) {
                     setUser(session.user);
                 }
@@ -48,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Check session validity periodically
         const interval = setInterval(() => {
-            const session = authService.getCurrentSession();
+            const session = getCurrentSession();
             if (!session) {
                 setUser(null);
             }
@@ -141,12 +141,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     }, []);
 
-    const forgotPassword = useCallback(async (email: string) => {
-        return authService.forgotPassword(email);
+    const forgotPasswordHandler = useCallback(async (email: string) => {
+        return forgotPassword(email);
     }, []);
 
-    const resetPassword = useCallback(async (token: string, newPassword: string) => {
-        return authService.resetPassword(token, newPassword);
+    const resetPasswordHandler = useCallback(async (token: string, newPassword: string) => {
+        return resetPassword(token, newPassword);
     }, []);
 
     return (
@@ -158,8 +158,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 login,
                 register,
                 logout,
-                forgotPassword,
-                resetPassword,
+                forgotPassword: forgotPasswordHandler,
+                resetPassword: resetPasswordHandler,
             }}
         >
             {children}
