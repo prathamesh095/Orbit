@@ -5,6 +5,20 @@ import crypto from 'crypto';
 const SALT_ROUNDS = 12;
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+// Parse IP address from x-forwarded-for header (takes first IP if multiple)
+export function parseIpAddress(ipString: string): string {
+  if (!ipString || ipString === 'unknown') return 'unknown';
+  // x-forwarded-for can be "IP1, IP2, IP3" - extract first IP
+  const ips = ipString.split(',').map(ip => ip.trim());
+  const firstIp = ips[0];
+  
+  // Validate IP format (basic check)
+  if (firstIp && /^[\d.]+$|^[\da-f:]+$/i.test(firstIp)) {
+    return firstIp;
+  }
+  return 'unknown';
+}
+
 // Password validation rules
 export function validatePassword(password: string): { valid: boolean; errors: string[] } {
   const errors: string[] = [];

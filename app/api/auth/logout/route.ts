@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { hashToken, invalidateSession, logAuthEvent } from '@/lib/auth-server';
+import { hashToken, invalidateSession, logAuthEvent, parseIpAddress } from '@/lib/auth-server';
 import { serialize } from 'cookie';
 
 export async function POST(request: NextRequest) {
   try {
-    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rawIpAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const ipAddress = parseIpAddress(rawIpAddress);
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     // Get session token from cookie

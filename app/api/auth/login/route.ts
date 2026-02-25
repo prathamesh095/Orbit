@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getUserByEmail, verifyPassword, createSession, logAuthEvent, updateLastLogin } from '@/lib/auth-server';
+import { getUserByEmail, verifyPassword, createSession, logAuthEvent, updateLastLogin, parseIpAddress } from '@/lib/auth-server';
 import { checkRateLimit, getRateLimitRemaining, getRateLimitResetTime, getRateLimitKey, RATE_LIMIT_CONFIGS } from '@/lib/rate-limit';
 import { serialize } from 'cookie';
 
@@ -17,7 +17,8 @@ export async function POST(request: NextRequest) {
     const { email, password } = body;
 
     // Get client IP and user agent
-    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rawIpAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const ipAddress = parseIpAddress(rawIpAddress);
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     // Check rate limit

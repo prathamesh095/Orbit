@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createUser, logAuthEvent, validatePassword } from '@/lib/auth-server';
+import { createUser, logAuthEvent, validatePassword, parseIpAddress } from '@/lib/auth-server';
 import { checkRateLimit, getRateLimitResetTime, getRateLimitKey, RATE_LIMIT_CONFIGS } from '@/lib/rate-limit';
 
 export async function POST(request: NextRequest) {
@@ -8,7 +8,8 @@ export async function POST(request: NextRequest) {
     const { email, password, confirmPassword, fullName } = body;
 
     // Get client IP and user agent
-    const ipAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const rawIpAddress = request.headers.get('x-forwarded-for') || request.headers.get('x-real-ip') || 'unknown';
+    const ipAddress = parseIpAddress(rawIpAddress);
     const userAgent = request.headers.get('user-agent') || 'unknown';
 
     // Check rate limit
