@@ -122,14 +122,17 @@ export function createUser(email: string, name: string, password: string): AuthU
         throw new Error('Password must be at least 6 characters');
     }
     
+    const passwordHash = hashPassword(password);
     const newUser: AuthUser = {
         id: generateUserId(),
         email: emailLower,
         name: name.trim(),
-        passwordHash: hashPassword(password),
+        passwordHash: passwordHash,
         createdAt: new Date(),
         lastLogin: null,
     };
+    
+    console.log('[AUTH DB] User created:', { id: newUser.id, email: emailLower, passwordHash });
     
     usersDatabase.set(newUser.id, newUser);
     usersDatabase.set(newUser.email, newUser);
@@ -159,13 +162,20 @@ export function findUserById(userId: string): AuthUser | null {
  */
 export function verifyPassword(user: AuthUser, password: string): boolean {
     const providedHash = hashPassword(password);
+    console.log('[AUTH DB] Password verification debug:', {
+        userId: user.id,
+        storedHash: user.passwordHash,
+        providedHash: providedHash,
+        match: user.passwordHash === providedHash,
+    });
     return user.passwordHash === providedHash;
 }
 
 /**
  * Create a session for a user
+ * Returns an object with both the sessionId and sessionData
  */
-export function createSession(userId: string, expiresInMs: number = 24 * 60 * 60 * 1000): SessionData {
+export function createSession(userId: string, expiresInMs: number = 24 * 60 * 60 * 1000): { sessionId: string; sessionData: SessionData } {
     const user = findUserById(userId);
     if (!user) {
         throw new Error('User not found');
@@ -185,7 +195,7 @@ export function createSession(userId: string, expiresInMs: number = 24 * 60 * 60
     // Update last login
     user.lastLogin = new Date();
     
-    return sessionData;
+    return { sessionId, sessionData };
 }
 
 /**

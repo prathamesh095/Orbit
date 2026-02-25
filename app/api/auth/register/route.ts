@@ -71,9 +71,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
 
         console.log('[AUTH] User created:', { id: newUser.id, email: newUser.email });
 
-        // Create session
-        const sessionId = generateSessionId();
-        createSession(newUser.id);
+        // Create session - returns both sessionId and sessionData
+        const { sessionId, sessionData } = createSession(newUser.id);
 
         console.log('[AUTH] Session created:', { sessionId });
 

@@ -57,9 +57,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
 
         console.log('[AUTH] Password verified:', emailLower);
 
-        // Create session
-        const sessionId = generateSessionId();
-        createSession(user.id);
+        // Create session - returns both sessionId and sessionData
+        const { sessionId, sessionData } = createSession(user.id);
 
         console.log('[AUTH] Session created:', { sessionId, userId: user.id });
 
