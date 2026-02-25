@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { StoredUser } from '@/services/storage/storageService';
-import { getStoredUsers, saveSession, type User } from '@/services/storage/storageService';
+import type { User } from '@/types';
+import { getServerUsers, findUserByEmail, type StoredUser } from './shared-auth';
 
 interface LoginRequest {
     email: string;
@@ -29,6 +29,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
         const body: LoginRequest = await request.json();
         const { email, password } = body;
 
+        console.log('[AUTH API] Login attempt:', { email });
+
         // Validate input
         if (!email || !password) {
             return NextResponse.json(
@@ -37,15 +39,16 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
             );
         }
 
-        // Get users from storage (in production: from database)
-        const users = getStoredUsers();
         const emailLower = email.toLowerCase().trim();
         const passwordTrimmed = password.trim();
 
-        // Find user
-        const user = users.find((u: StoredUser) => u.email === emailLower);
+        console.log('[AUTH API] Looking for user:', emailLower);
+        console.log('[AUTH API] Users in system:', getServerUsers().map((u: StoredUser) => u.email));
+
+        // Find user by email from server-side storage
+        const user = findUserByEmail(emailLower);
         if (!user) {
-            // Don't reveal user doesn't exist
+            console.log('[AUTH API] User not found:', emailLower);
             return NextResponse.json(
                 { success: false, error: 'Invalid email or password' },
                 { status: 401 }
@@ -54,43 +57,39 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
 
         // Verify password
         const incomingHash = hashPassword(passwordTrimmed);
+        console.log('[AUTH API] Password hash check:', { stored: user.passwordHash, provided: incomingHash });
+
         if (incomingHash !== user.passwordHash) {
+            console.log('[AUTH API] Password mismatch for user:', emailLower);
             return NextResponse.json(
                 { success: false, error: 'Invalid email or password' },
                 { status: 401 }
             );
         }
 
-        // Create session in storage (in production: database)
-        const expiresAt = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
-        const session = {
-            user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt },
-            expiresAt,
-        };
-        saveSession(session);
+        console.log('[AUTH API] Password verified for user:', emailLower);
 
         // Create response with secure HTTP-only cookie
         const response = NextResponse.json<LoginResponse>(
             {
                 success: true,
-                user: session.user,
+                user: { id: user.id, email: user.email, name: user.name, createdAt: user.createdAt },
             },
             { status: 200 }
         );
 
         // Set HTTP-only, Secure, SameSite cookie
-        // This cookie is only for middleware verification
         response.cookies.set({
             name: 'jt_session_id',
             value: user.id,
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: 'strict',
-            maxAge: 24 * 60 * 60, // 24 hours in seconds
+            maxAge: 24 * 60 * 60,
             path: '/',
         });
 
-        // Set session cookie for client (non-sensitive flag only)
+        // Set session cookie for client
         response.cookies.set({
             name: 'jt_authenticated',
             value: '1',
@@ -101,11 +100,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<LoginResp
             path: '/',
         });
 
+        console.log('[AUTH API] Login successful:', emailLower);
+
         return response;
     } catch (error) {
         console.error('[AUTH API] Login error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json(
-            { success: false, error: 'Login failed. Please try again.' },
+            { success: false, error: `Login failed: ${errorMsg}` },
             { status: 500 }
         );
     }

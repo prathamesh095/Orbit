@@ -1,11 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-    getStoredUsers,
-    saveStoredUsers,
-    saveSession,
-    type StoredUser,
-    type User,
-} from '@/services/storage/storageService';
+import type { User } from '@/types';
+import { getServerUsers, addServerUser, emailExists, type StoredUser } from './shared-auth';
 
 interface RegisterRequest {
     name: string;
@@ -42,6 +37,8 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
         const body: RegisterRequest = await request.json();
         const { name, email, password } = body;
 
+        console.log('[AUTH API] Register attempt:', { name, email });
+
         // Validate input
         if (!name || !email || !password) {
             return NextResponse.json(
@@ -64,12 +61,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
             );
         }
 
-        // Get users from storage
-        const users = getStoredUsers();
         const emailLower = email.toLowerCase().trim();
 
+        console.log('[AUTH API] Checking for existing user:', emailLower);
+
         // Check if user already exists
-        if (users.some((u: StoredUser) => u.email === emailLower)) {
+        if (emailExists(emailLower)) {
+            console.log('[AUTH API] User already exists:', emailLower);
             return NextResponse.json(
                 { success: false, error: 'An account with this email already exists' },
                 { status: 409 }
@@ -86,32 +84,29 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
             createdAt: now,
         };
 
-        // Save user to storage
-        users.push(newUser);
-        saveStoredUsers(users);
+        console.log('[AUTH API] Creating new user:', newUser.id);
+
+        // Save user to server-side storage
+        addServerUser(newUser);
 
         // Verify write succeeded
-        const persisted = getStoredUsers().find((u: StoredUser) => u.id === newUser.id);
+        const users = getServerUsers();
+        const persisted = users.find((u: StoredUser) => u.id === newUser.id);
         if (!persisted) {
+            console.error('[AUTH API] User not found after save:', newUser.id);
             return NextResponse.json(
                 { success: false, error: 'Failed to save account' },
                 { status: 500 }
             );
         }
 
-        // Create session
-        const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
-        const session = {
-            user: { id: newUser.id, email: newUser.email, name: newUser.name, createdAt: newUser.createdAt },
-            expiresAt,
-        };
-        saveSession(session);
+        console.log('[AUTH API] User saved successfully:', newUser.email);
 
         // Create response with secure cookies
         const response = NextResponse.json<RegisterResponse>(
             {
                 success: true,
-                user: session.user,
+                user: { id: newUser.id, email: newUser.email, name: newUser.name, createdAt: newUser.createdAt },
             },
             { status: 201 }
         );
@@ -137,11 +132,14 @@ export async function POST(request: NextRequest): Promise<NextResponse<RegisterR
             path: '/',
         });
 
+        console.log('[AUTH API] Registration successful:', newUser.email);
+
         return response;
     } catch (error) {
         console.error('[AUTH API] Register error:', error);
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json(
-            { success: false, error: 'Registration failed. Please try again.' },
+            { success: false, error: `Registration failed: ${errorMsg}` },
             { status: 500 }
         );
     }
